@@ -65,7 +65,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ name: strin
 
     const headersBase = new Headers({
       "Content-Type": mimeFor(filename),
-      "Cache-Control": "private, max-age=86400",
+      "Cache-Control": isZip ? "public, max-age=86400, immutable" : "public, max-age=3600",
     });
 
     if (isZip) {

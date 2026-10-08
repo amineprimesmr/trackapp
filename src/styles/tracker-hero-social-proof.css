@@ -168,6 +168,35 @@
   }
 }
 
+@media (max-width: 860px) {
+  .tracker-hero-social-proof--compact {
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.36rem 0.72rem 0.36rem 0.4rem;
+    font-size: 0.74rem;
+  }
+
+  .tracker-hero-social-proof--compact .tracker-hero-social-proof__stage {
+    gap: 0.5rem;
+    min-height: 1.5rem;
+  }
+
+  .tracker-hero-social-proof--compact .tracker-hero-social-proof__text {
+    white-space: nowrap;
+    max-width: none;
+  }
+
+  .tracker-hero-social-proof--compact .tracker-hero-social-proof__avatar,
+  .tracker-hero-social-proof--compact .tracker-hero-social-proof__brand-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .tracker-hero-social-proof--compact .tracker-hero-social-proof__avatar {
+    margin-left: -0.34rem;
+  }
+}
+
 @media (max-width: 420px) {
   .tracker-hero-social-proof {
     gap: 0.5rem;

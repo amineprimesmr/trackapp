@@ -4,7 +4,6 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { TrackappPaiementStripeCheckout } from "@/components/trackapp/trackapp-paiement-stripe-checkout";
-import { openTrackappStripeCheckout } from "@/lib/trackapp/stripe-payment-links";
 import { TRACKAPP_PAIEMENT_UNLOCK_ITEMS } from "@/lib/trackapp-paiement-unlock-items";
 import { getTrackappPaiementPlan, setTrackappPaiementPlan } from "@/lib/trackapp-paiement-plan-storage";
 import { TRACKAPP_PRICING, type TrackappBillingPlan } from "@/lib/trackapp/pricing";
@@ -89,9 +88,6 @@ function SpotlightOfferCheckout({
   checkoutReveal,
   checkoutRevealed,
   onRevealCheckout,
-  directStripeLink = false,
-  country: _country,
-  onCountryChange: _onCountryChange,
 }: Readonly<{
   plan: TrackappBillingPlan;
   priceAmount: string;
@@ -100,33 +96,7 @@ function SpotlightOfferCheckout({
   checkoutReveal: boolean;
   checkoutRevealed: boolean;
   onRevealCheckout: () => void;
-  directStripeLink?: boolean;
-  country: string;
-  onCountryChange: (code: string) => void;
 }>) {
-  const [stripeBusy, setStripeBusy] = useState(false);
-
-  const goCheckout = useCallback(async () => {
-    if (stripeBusy) return;
-    setStripeBusy(true);
-    try {
-      await openTrackappStripeCheckout(plan);
-    } catch {
-      setStripeBusy(false);
-    }
-  }, [plan, stripeBusy]);
-
-  if (directStripeLink) {
-    return (
-      <div className="tpl-spotlight__checkout-intro">
-        <UnlockCreditBox priceAmount={priceAmount} pricePeriod={pricePeriod} priceNote={priceNote} />
-        <button type="button" className="tpl-spotlight__join" onClick={goCheckout} disabled={stripeBusy}>
-          {stripeBusy ? "Redirection…" : "Rejoindre"}
-        </button>
-      </div>
-    );
-  }
-
   const showExpress = !checkoutReveal || !checkoutRevealed;
   const showCard = !checkoutReveal || checkoutRevealed;
 
@@ -300,8 +270,6 @@ function PageSpotlightCarousel({
     };
   }, [checkoutRevealed, goLifetime, goMonthly, index]);
 
-  const [country, setCountry] = useState("FR");
-
   const showMonthlySlide = !checkoutReveal || !checkoutRevealed || index === 1;
   const showLifetimeSlide = !checkoutReveal || !checkoutRevealed || index === 0;
 
@@ -350,8 +318,6 @@ function PageSpotlightCarousel({
                     checkoutReveal={checkoutReveal}
                     checkoutRevealed={checkoutRevealed && index === 1}
                     onRevealCheckout={revealCheckout}
-                    country={country}
-                    onCountryChange={setCountry}
                   />
                 </div>
               </div>
@@ -377,8 +343,6 @@ function PageSpotlightCarousel({
                     checkoutReveal={checkoutReveal}
                     checkoutRevealed={checkoutRevealed && index === 0}
                     onRevealCheckout={revealCheckout}
-                    country={country}
-                    onCountryChange={setCountry}
                   />
                 </div>
               </div>
@@ -446,11 +410,8 @@ function ModalSpotlightGrid({ className }: Readonly<{ className?: string }>) {
                   pricePeriod={monthly.period}
                   priceNote={monthly.note}
                   checkoutReveal
-                  checkoutRevealed={false}
+                  checkoutRevealed
                   onRevealCheckout={() => {}}
-                  directStripeLink
-                  country="FR"
-                  onCountryChange={() => {}}
                 />
               </div>
             </div>
@@ -472,11 +433,8 @@ function ModalSpotlightGrid({ className }: Readonly<{ className?: string }>) {
                   pricePeriod={lifetime.period}
                   priceNote={lifetime.note}
                   checkoutReveal
-                  checkoutRevealed={false}
+                  checkoutRevealed
                   onRevealCheckout={() => {}}
-                  directStripeLink
-                  country="FR"
-                  onCountryChange={() => {}}
                 />
               </div>
             </div>

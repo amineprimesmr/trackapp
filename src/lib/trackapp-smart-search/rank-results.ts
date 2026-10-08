@@ -14,7 +14,7 @@ export const TRACKAPP_SEARCH_SORT_OPTIONS: ReadonlyArray<{
   { id: "rating", label: "Note" },
 ];
 
-function relevanceScore(query: string, app: SearchResult): number {
+export function relevanceScore(query: string, app: SearchResult): number {
   const q = query.trim().toLowerCase();
   if (!q) return 0;
   const name = app.name.toLowerCase();

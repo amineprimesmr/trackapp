@@ -8,8 +8,6 @@ export type ApplabCreateStepId =
   | "name"
   | "concept"
   | "audience"
-  | "problem"
-  | "v1_features"
   | "pricing"
   | "synthesis";
 
@@ -31,18 +29,18 @@ export type ApplabCreateDraft = Readonly<{
   stack: ApplabMvpStack;
   promptVersions: readonly ApplabPromptVersion[];
   activePromptVersionId: string | null;
+  /** Concurrents mémorisés pour réafficher le bilan sans relancer l’analyse. */
+  synthesisCompetitors: readonly import("@/lib/trackapp-applab-project/types").ApplabReferenceMatch[];
   syncedAt: string | null;
   updatedAt: string;
 }>;
 
 export const APPLAB_CREATE_STEPS: readonly Readonly<{ id: ApplabCreateStepId; label: string }>[] = [
   { id: "name", label: "Nom du projet" },
-  { id: "concept", label: "Concept" },
-  { id: "audience", label: "Cible" },
-  { id: "problem", label: "Problème" },
-  { id: "v1_features", label: "V1" },
-  { id: "pricing", label: "Prix" },
-  { id: "synthesis", label: "Bilan AppLAB" },
+  { id: "concept", label: "Description" },
+  { id: "audience", label: "Public cible" },
+  { id: "pricing", label: "Tarifs" },
+  { id: "synthesis", label: "Bilan produit" },
 ];
 
 export const DEFAULT_APPLAB_CONSTRAINTS: ApplabCreateConstraints = {

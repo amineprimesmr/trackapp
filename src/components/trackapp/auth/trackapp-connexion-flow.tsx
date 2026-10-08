@@ -15,6 +15,7 @@ import {
 import { TrackappConnexionMissingSupabase } from "@/components/trackapp/auth/trackapp-connexion-missing-supabase";
 import { TrackappPaymentNavLink } from "@/components/trackapp/trackapp-payment-nav-link";
 import { createClient } from "@/lib/supabase/client";
+import { claimPostPaymentAccess } from "@/lib/trackapp/post-payment-flow";
 import { syncOnboardingDraftToProfile } from "@/lib/trackapp-onboarding/local-draft";
 
 function ConnexionExperienceInner({
@@ -80,6 +81,7 @@ function ConnexionExperienceInner({
     try {
       await fetch("/api/trackapp/profile/ensure", { method: "POST", credentials: "same-origin" });
       await syncOnboardingDraftToProfile();
+      await claimPostPaymentAccess();
     } catch {
       /* profil créé au prochain accès workspace si besoin */
     }

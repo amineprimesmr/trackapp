@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import {
   ClaudeIcon,
@@ -33,9 +33,24 @@ export type TrackerHeroSocialProofAvatar = {
 type Slide = Readonly<{
   id: string;
   ariaLabel: string;
+  mobileAriaLabel: string;
   leading: ReactNode;
   text: ReactNode;
+  mobileText: ReactNode;
 }>;
+
+function useMobileSocialProofText(breakpointPx = 860): boolean {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === "undefined") return () => undefined;
+      const mq = window.matchMedia(`(max-width: ${breakpointPx}px)`);
+      mq.addEventListener("change", onStoreChange);
+      return () => mq.removeEventListener("change", onStoreChange);
+    },
+    () => window.matchMedia(`(max-width: ${breakpointPx}px)`).matches,
+    () => false,
+  );
+}
 
 type Props = Readonly<{
   avatars?: TrackerHeroSocialProofAvatar[];
@@ -70,38 +85,49 @@ function buildSlides(avatars?: TrackerHeroSocialProofAvatar[]): Slide[] {
     {
       id: "creators",
       ariaLabel: "Utilisé par plus de 1 384 créateurs d'app",
+      mobileAriaLabel: "Plus de 1 384 créateurs d'app",
       leading: <CreatorsAvatars avatars={avatars} />,
-      text: <>Utilisé par <strong>1 384+</strong> créateurs d&apos;app</>,
+      text: <>Utilisé par <strong>+1 384</strong> créateurs d&apos;app</>,
+      mobileText: <><strong>+1 384</strong> créateurs d&apos;app</>,
     },
     {
       id: "claude",
       ariaLabel: "Modèle IA Claude Opus 4.8",
+      mobileAriaLabel: "Claude Opus 4.8",
       leading: <ClaudeIcon />,
       text: <>Propulsé par <strong>Claude Opus 4.8</strong></>,
+      mobileText: <><strong>Claude Opus 4.8</strong></>,
     },
     {
       id: "gpt",
       ariaLabel: "Modèle IA GPT Image 5.5",
+      mobileAriaLabel: "GPT Image 5.5",
       leading: <OpenAiIcon />,
       text: <>Images via <strong>GPT Image 5.5</strong></>,
+      mobileText: <><strong>GPT Image 5.5</strong></>,
     },
     {
       id: "cursor",
       ariaLabel: "Modèle IA Cursor Composer 2.5",
+      mobileAriaLabel: "Cursor Composer 2.5",
       leading: <CursorIcon />,
       text: <>Code avec <strong>Cursor Composer 2.5</strong></>,
+      mobileText: <><strong>Cursor 2.5</strong></>,
     },
     {
       id: "perplexity",
-      ariaLabel: "Recherche via Perplexity",
+      ariaLabel: "Recherche avec Perplexity",
+      mobileAriaLabel: "Recherche avec Perplexity",
       leading: <PerplexityIcon />,
-      text: <>Recherche via <strong>Perplexity</strong></>,
+      text: <>Recherche avec <strong>Perplexity</strong></>,
+      mobileText: <>Recherche avec <strong>Perplexity</strong></>,
     },
   ];
 }
 
 export function TrackerHeroSocialProofBadge({ avatars, className, surface = "dark" }: Props) {
   const reduceMotion = useReducedMotion();
+  const isMobile = useMobileSocialProofText();
   const slides = useMemo(() => buildSlides(avatars), [avatars]);
   const [index, setIndex] = useState(0);
   const [animKey, setAnimKey] = useState(0);
@@ -121,6 +147,8 @@ export function TrackerHeroSocialProofBadge({ avatars, className, surface = "dar
   }, [reduceMotion, slides.length]);
 
   const slide = slides[index] ?? slides[0];
+  const label = isMobile ? slide.mobileAriaLabel : slide.ariaLabel;
+  const copy = isMobile ? slide.mobileText : slide.text;
 
   return (
     <>
@@ -128,16 +156,17 @@ export function TrackerHeroSocialProofBadge({ avatars, className, surface = "dar
       <p
       className={cn(
         "tracker-hero-social-proof",
+        isMobile && "tracker-hero-social-proof--compact",
         surface === "light" && "tracker-hero-social-proof--light",
         className,
       )}
       role="status"
       aria-live="polite"
-      aria-label={slide.ariaLabel}
+      aria-label={label}
     >
       <span className="tracker-hero-social-proof__stage" key={animKey}>
         <span className="tracker-hero-social-proof__leading">{slide.leading}</span>
-        <span className="tracker-hero-social-proof__text">{slide.text}</span>
+        <span className="tracker-hero-social-proof__text">{copy}</span>
       </span>
     </p>
     </>

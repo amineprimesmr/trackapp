@@ -147,27 +147,6 @@ export async function generateApplabMvpPrompt(input: {
     2,
   );
 
-  const { buildLocalApplabMvpPromptBundle, shouldUseApplabLocalDevFallback } = await import(
-    "@/lib/trackapp-applab-create/local-dev-fallback"
-  );
-  if (shouldUseApplabLocalDevFallback()) {
-    return {
-      bundle: await buildLocalApplabMvpPromptBundle({
-        projectName: input.projectName,
-        concept: input.concept,
-        stack: input.stack,
-        understanding: input.understanding,
-        assessment: input.assessment,
-        clarifications,
-        constraints,
-        referenceAppId: input.referenceAppId,
-        referenceCountry: input.referenceCountry,
-        versionNumber: input.versionNumber,
-        versionId: input.versionId,
-      }),
-    };
-  }
-
   const result = await callApplabProjectOpenAi<unknown>({
     instructions: BUILD_MVP_PROMPT_SYSTEM,
     input: userInput,

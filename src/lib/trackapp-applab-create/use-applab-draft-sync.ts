@@ -103,5 +103,12 @@ export function useApplabDraftSync(
     await saveApplabPromptVersionToServer(sb, userId, version);
   }, []);
 
+  useEffect(
+    () => () => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+    },
+    [],
+  );
+
   return { pushDraft, pushPromptVersion };
 }

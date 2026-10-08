@@ -2,11 +2,16 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
-import { fetchIosAggregateAppMetricsBatch } from "@/lib/apple-charts";
+import { fetchIosAggregateAppMetricsBatch, type IosAggregateAppMetrics } from "@/lib/apple-charts";
 import type { AppShowcaseVideoItem } from "@/lib/selection-app/types";
 import { isSelectionAppStoreId, listSelectionAppItemsFromManifest } from "@/lib/selection-app/items";
 import { scanSelectionAppItems } from "@/lib/selection-app/scan.server";
 import type { AppShowcaseVideoItemEnriched } from "@/lib/showcase-app-videos-types";
+import {
+  deriveShowcaseMonthlyRevenueEUR,
+  formatShowcaseEurMonthlyLabel,
+  showcaseMonthlyRevenueCanonicalKey,
+} from "@/lib/showcase-revenue-display";
 import { sensorTowerShowcaseMonthlyLabel } from "@/lib/trackapp-real-metrics-only";
 
 export type { AppShowcaseVideoItemEnriched } from "@/lib/showcase-app-videos-types";
@@ -56,6 +61,25 @@ function resolveShowcaseArtwork(
   return { artworkUrl, iconSrc };
 }
 
+function manifestFallbackMonthlyLabel(item: AppShowcaseVideoItem): string | null {
+  if (!item.approxMonthlyRevenueEUR || item.approxMonthlyRevenueEUR <= 0) return null;
+  const eur = deriveShowcaseMonthlyRevenueEUR(
+    item.approxMonthlyRevenueEUR,
+    showcaseMonthlyRevenueCanonicalKey(item.displayName, item.src),
+  );
+  return formatShowcaseEurMonthlyLabel(eur);
+}
+
+function resolveMonthlyRevenueLabel(
+  item: AppShowcaseVideoItem,
+  agg: IosAggregateAppMetrics | null | undefined,
+): string | null {
+  if (!isSelectionAppStoreId(item.appStoreId)) return null;
+  return (
+    sensorTowerShowcaseMonthlyLabel(agg ?? null, item.appStoreId) ?? manifestFallbackMonthlyLabel(item)
+  );
+}
+
 async function enrichShowcaseItems(items: readonly AppShowcaseVideoItem[]): Promise<AppShowcaseVideoItemEnriched[]> {
   const realIds = [...new Set(items.map((i) => i.appStoreId).filter(isSelectionAppStoreId))];
   const [aggMap, artworkMap] = await Promise.all([
@@ -70,9 +94,7 @@ async function enrichShowcaseItems(items: readonly AppShowcaseVideoItem[]): Prom
     return {
       ...item,
       ...visuals,
-      monthlyRevenueLabel: isSelectionAppStoreId(item.appStoreId)
-        ? sensorTowerShowcaseMonthlyLabel(aggMap.get(item.appStoreId) ?? null, item.appStoreId)
-        : null,
+      monthlyRevenueLabel: resolveMonthlyRevenueLabel(item, aggMap.get(item.appStoreId)),
     };
   });
 }
@@ -81,7 +103,7 @@ async function enrichShowcaseItems(items: readonly AppShowcaseVideoItem[]): Prom
 export function listAppShowcaseVideoItemsFallbackEnriched(): AppShowcaseVideoItemEnriched[] {
   return listSelectionAppItemsFromManifest().map((item) => ({
     ...item,
-    monthlyRevenueLabel: null,
+    monthlyRevenueLabel: manifestFallbackMonthlyLabel(item),
   }));
 }
 
@@ -93,6 +115,6 @@ async function listAppShowcaseVideoItemsEnrichedCore(): Promise<AppShowcaseVideo
 
 export const listAppShowcaseVideoItemsEnriched = unstable_cache(
   listAppShowcaseVideoItemsEnrichedCore,
-  ["selection-app-showcase-enriched-v2-bevel"],
+  ["selection-app-showcase-enriched-v3-manifest-fallback"],
   { revalidate: 3600 },
 );

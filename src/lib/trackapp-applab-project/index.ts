@@ -1,4 +1,5 @@
 export type {
+  ApplabClientPersona,
   ApplabConceptAnswers,
   ApplabConceptAssessment,
   ApplabConceptClarifyStatus,

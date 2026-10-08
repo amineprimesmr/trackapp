@@ -35,6 +35,8 @@ function isRouterPrefetch(request: NextRequest): boolean {
 
 const PREMIUM_EXEMPT_PREFIXES = [
   "/trackapp/paiement",
+  "/trackapp/merci",
+  "/trackapp/bienvenue",
   "/trackapp/activation",
   "/trackapp/connexion",
   "/trackapp/inscription",
@@ -62,7 +64,6 @@ const PROTECT_PREFIXES = [
   "/trackapp/creer-depuis-app",
   "/trackapp/applab",
   "/trackapp/logiciels",
-  "/trackapp/ressources",
   "/trackapp/favoris",
   "/trackapp/gagner-240",
 ];
@@ -94,6 +95,9 @@ export async function middleware(request: NextRequest) {
   }
 
   const isResourcesApi = pathname.startsWith("/api/trackapp/ressources");
+  const isPublicResourceFileDownload =
+    request.method === "GET"
+    && /^\/api\/trackapp\/ressources\/file\/[^/]+\.(zip|mp4|mov|webm|m4v)$/i.test(pathname);
   const isFavoritesApi = pathname.startsWith("/api/trackapp/favorites");
   const isProfileEnsureApi = pathname === "/api/trackapp/profile/ensure";
   const isProfileOnboardingApi = pathname.startsWith("/api/trackapp/profile/onboarding");
@@ -101,6 +105,7 @@ export async function middleware(request: NextRequest) {
   const isMediaProxyApi = pathname.startsWith("/api/trackapp/media-proxy");
   const isInstagramOrganicApi = pathname.startsWith("/api/trackapp/instagram-organic");
   const isTikTokOrganicApi = pathname.startsWith("/api/trackapp/tiktok-organic");
+  const isMetaAdsApi = pathname.startsWith("/api/trackapp/meta-ads");
 
   if (
     !pathname.startsWith("/trackapp") &&
@@ -111,7 +116,8 @@ export async function middleware(request: NextRequest) {
     !isAffiliateApi &&
     !isMediaProxyApi &&
     !isInstagramOrganicApi &&
-    !isTikTokOrganicApi
+    !isTikTokOrganicApi &&
+    !isMetaAdsApi
   ) {
     return response;
   }
@@ -121,6 +127,7 @@ export async function middleware(request: NextRequest) {
 
   const needsAuth =
     !isGuestPreviewPath(pathname)
+    && !isPublicResourceFileDownload
     && (
       PROTECT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
       || isResourcesApi
@@ -131,6 +138,7 @@ export async function middleware(request: NextRequest) {
       || isMediaProxyApi
       || isInstagramOrganicApi
       || isTikTokOrganicApi
+      || isMetaAdsApi
     );
 
   /** En local tu peux ouvrir l’UI SaaS sans session ; la page serve les données maquette. */

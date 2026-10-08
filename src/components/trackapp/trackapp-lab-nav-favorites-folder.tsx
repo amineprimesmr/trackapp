@@ -17,11 +17,6 @@ import {
 import { trackappAccueilAppHref } from "@/lib/trackapp-apptracker-paths";
 import { cn } from "@/lib/utils";
 
-type FavoriteResourceMeta = Readonly<{
-  id: string;
-  title: string;
-}>;
-
 function FavoritesSubfolder({
   label,
   count,
@@ -79,9 +74,7 @@ export function TrackappLabNavFavoritesFolder({
   const inFavorites = pathname.startsWith("/trackapp/favoris");
   const [open, setOpen] = useState(inFavorites);
   const [appsOpen, setAppsOpen] = useState(true);
-  const [resourcesOpen, setResourcesOpen] = useState(inFavorites && pathname.includes("/ressources"));
   const [apps, setApps] = useState<TrackappFavoriteAppMeta[]>([]);
-  const [resources, setResources] = useState<FavoriteResourceMeta[]>([]);
   const [loading, setLoading] = useState(false);
 
   const prefetchHref = useCallback(
@@ -94,7 +87,6 @@ export function TrackappLabNavFavoritesFolder({
   const loadSidebar = useCallback(async () => {
     if (!loggedIn) {
       setApps([]);
-      setResources([]);
       return;
     }
     setLoading(true);
@@ -103,10 +95,8 @@ export function TrackappLabNavFavoritesFolder({
       if (!res.ok) return;
       const data = (await res.json()) as {
         apps?: TrackappFavoriteAppMeta[];
-        resources?: FavoriteResourceMeta[];
       };
       setApps(Array.isArray(data.apps) ? data.apps : []);
-      setResources(Array.isArray(data.resources) ? data.resources : []);
     } finally {
       setLoading(false);
     }
@@ -114,7 +104,6 @@ export function TrackappLabNavFavoritesFolder({
 
   useEffect(() => {
     if (inFavorites) setOpen(true);
-    if (pathname.includes("/favoris/ressources")) setResourcesOpen(true);
   }, [inFavorites, pathname]);
 
   useEffect(() => {
@@ -176,7 +165,7 @@ export function TrackappLabNavFavoritesFolder({
     );
   }
 
-  const totalCount = apps.length + resources.length;
+  const totalCount = apps.length;
   const folderActive =
     inFavorites || apps.some((a) => pathname.includes(`/accueil/${a.id}`));
 
@@ -246,45 +235,6 @@ export function TrackappLabNavFavoritesFolder({
                         />
                       </span>
                       <span className="trackapp-lab-nav__favorites-app-name">{app.name}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </FavoritesSubfolder>
-
-          <FavoritesSubfolder
-            label="Ressources"
-            count={resources.length}
-            open={resourcesOpen}
-            onToggle={() => setResourcesOpen((v) => !v)}
-            emptyLabel="Aucune ressource — like une vidéo sur Ressources."
-          >
-            <ul className="trackapp-lab-nav__favorites-apps">
-              {resources.map((resource) => {
-                const href = "/trackapp/ressources";
-                const active = pathname === href;
-                return (
-                  <li key={resource.id}>
-                    <Link
-                      href={href}
-                      prefetch
-                      className={cn(
-                        "trackapp-lab-nav__favorites-app",
-                        active && "trackapp-lab-nav__favorites-app--active",
-                      )}
-                      onPointerEnter={() => prefetchHref(href)}
-                      onFocus={() => prefetchHref(href)}
-                      onClick={() => {
-                        if (!active) startNav?.();
-                        onNavigate?.();
-                      }}
-                      title={resource.title}
-                    >
-                      <span className="trackapp-lab-nav__favorites-app-art trackapp-lab-nav__favorites-resource-art">
-                        ▶
-                      </span>
-                      <span className="trackapp-lab-nav__favorites-app-name">{resource.title}</span>
                     </Link>
                   </li>
                 );

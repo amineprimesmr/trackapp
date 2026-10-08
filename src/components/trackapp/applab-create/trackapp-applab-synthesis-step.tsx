@@ -1,40 +1,44 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { TrackappApplabMvpPromptExport } from "@/components/trackapp/applab-create/trackapp-applab-mvp-prompt-export";
-import type { ReferenceSuggestion } from "@/components/trackapp/applab-create/trackapp-applab-reference-suggestions";
 import {
-  appendPromptVersion,
-} from "@/lib/trackapp-applab-create/storage";
-import type { ApplabCreateDraft } from "@/lib/trackapp-applab-create/types";
+  APPLAB_SYNTHESIS_PIPELINE_STEPS,
+  TrackappApplabSynthesisLoader,
+  type ApplabSynthesisPipelineId,
+} from "@/components/trackapp/applab-create/trackapp-applab-synthesis-loader";
+import { TrackappApplabSynthesisProfile } from "@/components/trackapp/applab-create/trackapp-applab-synthesis-profile";
+import type { ReferenceSuggestion } from "@/components/trackapp/applab-create/trackapp-applab-reference-suggestions";
 import {
   buildUnderstandingFromCreateAnswers,
   createQuestionsForApi,
   migrateCreateAnswers,
 } from "@/lib/trackapp-applab-create/create-questions";
-import {
-  TRACKAPP_APPLAB_AUTO_DECISIONS,
-  TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS,
-} from "@/lib/trackapp-applab-create/trackapp-auto-decisions";
-import { trackappAccueilAppHref } from "@/lib/trackapp-apptracker-paths";
+import { isApplabSynthesisCached } from "@/lib/trackapp-applab-create/storage";
+import { TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS } from "@/lib/trackapp-applab-create/trackapp-auto-decisions";
+import type { ApplabCreateDraft } from "@/lib/trackapp-applab-create/types";
 import type {
   ApplabConceptAssessment,
   ApplabConceptUnderstanding,
+  ApplabReferenceMatch,
 } from "@/lib/trackapp-applab-project/types";
-import { cn } from "@/lib/utils";
+type PipelineId = ApplabSynthesisPipelineId;
 
-type PipelineId = "answers" | "understanding" | "assessment" | "competitors" | "prompt";
+const PIPELINE_STEPS = APPLAB_SYNTHESIS_PIPELINE_STEPS;
 
-const PIPELINE_STEPS: readonly { id: PipelineId; label: string }[] = [
-  { id: "answers", label: "Lecture de vos réponses" },
-  { id: "understanding", label: "Structuration du concept" },
-  { id: "assessment", label: "Synthèse produit & monétisation" },
-  { id: "competitors", label: "Recherche des concurrents App Store" },
-  { id: "prompt", label: "Génération du prompt Xcode" },
-];
+function toReferenceSuggestions(apps: readonly ApplabReferenceMatch[]): ReferenceSuggestion[] {
+  return apps.map((app) => ({
+    id: app.id,
+    name: app.name,
+    artistName: app.artistName,
+    category: app.category,
+    artworkUrl: app.artworkUrl,
+    revenueDisplay: app.revenueDisplay,
+    relevanceScore: app.relevanceScore,
+    relevanceReason: app.relevanceReason,
+    rank: app.rank,
+  }));
+}
 
 type Props = Readonly<{
   draft: ApplabCreateDraft;
@@ -53,12 +57,16 @@ export function TrackappApplabSynthesisStep({
   onPhaseChange,
   onSyncPromptVersion,
 }: Props) {
-  const startedRef = useRef(false);
-  const [phase, setPhase] = useState<"analyzing" | "reveal">("analyzing");
+  const cachedOnMount = isApplabSynthesisCached(draft);
+  const bootstrappedRef = useRef(false);
+
+  const [phase, setPhase] = useState<"analyzing" | "reveal">(cachedOnMount ? "reveal" : "analyzing");
   const [activePipeline, setActivePipeline] = useState(0);
   const [donePipeline, setDonePipeline] = useState<readonly PipelineId[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [competitors, setCompetitors] = useState<ReferenceSuggestion[]>([]);
+  const [competitors, setCompetitors] = useState<ReferenceSuggestion[]>(() =>
+    toReferenceSuggestions(draft.synthesisCompetitors ?? []),
+  );
 
   const answers = useMemo(() => migrateCreateAnswers(draft.clarifyingAnswers), [draft.clarifyingAnswers]);
   const ctx = useMemo(() => ({ name: draft.name, concept: draft.concept, answers }), [answers, draft.concept, draft.name]);
@@ -70,68 +78,11 @@ export function TrackappApplabSynthesisStep({
     if (idx >= 0) setActivePipeline(Math.min(idx + 1, PIPELINE_STEPS.length - 1));
   }, []);
 
-  const runPipeline = useCallback(async () => {
-    onBusyChange?.(true);
-    setError(null);
-    setPhase("analyzing");
-    setDonePipeline([]);
-    setActivePipeline(0);
-
-    try {
-      await new Promise((r) => setTimeout(r, 420));
-      markDone("answers");
-
-      const understanding: ApplabConceptUnderstanding = buildUnderstandingFromCreateAnswers(
-        draft.name,
-        draft.concept,
-        answers,
-      );
-      await new Promise((r) => setTimeout(r, 380));
-      markDone("understanding");
-
-      let assessment: ApplabConceptAssessment | null = draft.assessment;
-      if (!assessment) {
-        const assessRes = await fetch("/api/trackapp/applab/concept", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "assess",
-            name: draft.name,
-            concept: draft.concept,
-            understanding,
-            answers,
-            questions,
-          }),
-          cache: "no-store",
-        });
-        const assessData = (await assessRes.json()) as {
-          assessment?: ApplabConceptAssessment;
-          error?: string;
-          failure?: string;
-          failureDetail?: string;
-        };
-        if (!assessRes.ok || !assessData.assessment) {
-          const detail =
-            assessData.failure === "openai_missing_key"
-              ? "Ajoutez OPENAI_API_KEY dans .env.local puis redémarrez le serveur."
-              : assessData.failureDetail?.trim();
-          throw new Error(detail || assessData.error || "Synthèse indisponible.");
-        }
-        assessment = assessData.assessment;
-      }
-      markDone("assessment");
-
-      let nextDraft: ApplabCreateDraft = {
-        ...draft,
-        understanding,
-        assessment,
-        clarifyingQuestions: questions,
-        constraints: {
-          mustHave: TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS.mustHave,
-          mustNot: TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS.mustNot,
-        },
-      };
-
+  const fetchCompetitors = useCallback(
+    async (
+      understanding: ApplabConceptUnderstanding,
+      assessment: ApplabConceptAssessment,
+    ): Promise<readonly ApplabReferenceMatch[]> => {
       const refRes = await fetch("/api/trackapp/applab/reference-suggestions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,11 +95,17 @@ export function TrackappApplabSynthesisStep({
         }),
         cache: "no-store",
       });
-      const refData = (await refRes.json()) as { apps?: ReferenceSuggestion[] };
-      const apps = Array.isArray(refData.apps) ? refData.apps : [];
-      setCompetitors(apps);
+      const refData = (await refRes.json()) as { apps?: ApplabReferenceMatch[] };
+      return Array.isArray(refData.apps) ? refData.apps : [];
+    },
+    [draft.concept, draft.name, draft.referenceCountry],
+  );
 
+  const applyCompetitors = useCallback(
+    (apps: readonly ApplabReferenceMatch[], base: ApplabCreateDraft) => {
+      setCompetitors(toReferenceSuggestions(apps));
       const top = apps[0];
+      let nextDraft: ApplabCreateDraft = { ...base, synthesisCompetitors: apps };
       if (top && !nextDraft.referenceAppId) {
         nextDraft = {
           ...nextDraft,
@@ -157,25 +114,137 @@ export function TrackappApplabSynthesisStep({
           referenceAppArtworkUrl: top.artworkUrl,
         };
       }
-      markDone("competitors");
       onDraftChange(nextDraft);
+    },
+    [onDraftChange],
+  );
 
-      await new Promise((r) => setTimeout(r, 320));
-      markDone("prompt");
+  const runPipeline = useCallback(
+    async (options?: Readonly<{ force?: boolean }>) => {
+      const force = options?.force === true;
 
-      setPhase("reveal");
-      onPhaseChange?.("reveal");
-      onReadyChange?.(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Analyse impossible pour l'instant.");
-    } finally {
-      onBusyChange?.(false);
-    }
-  }, [answers, draft, markDone, onBusyChange, onDraftChange, onReadyChange, questions]);
+      if (!force && isApplabSynthesisCached(draft)) {
+        setPhase("reveal");
+        onPhaseChange?.("reveal");
+        onReadyChange?.(Boolean(draft.activePromptVersionId && draft.promptVersions.length > 0));
+        if ((draft.synthesisCompetitors ?? []).length > 0) {
+          setCompetitors(toReferenceSuggestions(draft.synthesisCompetitors));
+        }
+        return;
+      }
+
+      onBusyChange?.(true);
+      setError(null);
+      setPhase("analyzing");
+      onPhaseChange?.("analyzing");
+      setDonePipeline([]);
+      setActivePipeline(0);
+
+      try {
+        await new Promise((r) => setTimeout(r, 420));
+        markDone("answers");
+
+        const understanding: ApplabConceptUnderstanding = buildUnderstandingFromCreateAnswers(
+          draft.name,
+          draft.concept,
+          answers,
+        );
+        await new Promise((r) => setTimeout(r, 380));
+        markDone("understanding");
+
+        let assessment: ApplabConceptAssessment | null = draft.assessment;
+        if (!assessment || force) {
+          const assessRes = await fetch("/api/trackapp/applab/concept", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "assess",
+              name: draft.name,
+              concept: draft.concept,
+              understanding,
+              answers,
+              questions,
+            }),
+            cache: "no-store",
+          });
+          const assessData = (await assessRes.json()) as {
+            assessment?: ApplabConceptAssessment;
+            error?: string;
+            failure?: string;
+            failureDetail?: string;
+          };
+          if (!assessRes.ok || !assessData.assessment) {
+            const detail =
+              assessData.failure === "openai_missing_key"
+                ? "Ajoutez OPENAI_API_KEY dans .env.local puis redémarrez le serveur."
+                : assessData.failureDetail?.trim();
+            throw new Error(detail || assessData.error || "Synthèse indisponible.");
+          }
+          assessment = assessData.assessment;
+        }
+        markDone("assessment");
+
+        const enrichedUnderstanding: ApplabConceptUnderstanding = {
+          ...understanding,
+          target_user: assessment?.target_user || understanding.target_user,
+          monetization: assessment?.monetization || understanding.monetization,
+          key_features:
+            assessment && assessment.mvp_features.length > 0
+              ? assessment.mvp_features
+              : understanding.key_features,
+          niche: assessment?.positioning || understanding.niche,
+          core_problem: assessment?.value_proposition || understanding.core_problem,
+        };
+
+        let nextDraft: ApplabCreateDraft = {
+          ...draft,
+          understanding: enrichedUnderstanding,
+          assessment,
+          clarifyingQuestions: questions,
+          constraints: {
+            mustHave: TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS.mustHave,
+            mustNot: TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS.mustNot,
+          },
+        };
+
+        const apps = await fetchCompetitors(enrichedUnderstanding, assessment!);
+        applyCompetitors(apps, nextDraft);
+        markDone("competitors");
+
+        await new Promise((r) => setTimeout(r, 320));
+        markDone("prompt");
+
+        setPhase("reveal");
+        onPhaseChange?.("reveal");
+        onReadyChange?.(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Analyse impossible pour l'instant.");
+      } finally {
+        onBusyChange?.(false);
+      }
+    },
+    [
+      answers,
+      applyCompetitors,
+      draft,
+      fetchCompetitors,
+      markDone,
+      onBusyChange,
+      onPhaseChange,
+      onReadyChange,
+      questions,
+    ],
+  );
+
+  useLayoutEffect(() => {
+    if (!isApplabSynthesisCached(draft)) return;
+    setPhase("reveal");
+    onPhaseChange?.("reveal");
+  }, [draft.assessment, draft.understanding, onPhaseChange]);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    if (bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
     void runPipeline();
   }, [runPipeline]);
 
@@ -184,42 +253,14 @@ export function TrackappApplabSynthesisStep({
     onReadyChange?.(ready);
   }, [draft.activePromptVersionId, draft.promptVersions.length, onReadyChange]);
 
+  useEffect(() => {
+    if (draft.synthesisCompetitors.length === 0) return;
+    setCompetitors(toReferenceSuggestions(draft.synthesisCompetitors));
+  }, [draft.synthesisCompetitors]);
+
   if (phase === "analyzing" && !error) {
     return (
-      <div className="ta-applab-synthesis ta-applab-synthesis--analyzing" aria-busy="true">
-        <div className="ta-applab-synthesis__scan">
-          <span className="ta-applab-synthesis__scan-ring" aria-hidden />
-          <span className="ta-applab-synthesis__scan-core" aria-hidden>
-            ✦
-          </span>
-        </div>
-        <p className="ta-applab-synthesis__scan-title">Analyse AppLAB en cours</p>
-        <p className="ta-applab-synthesis__scan-sub">
-          On structure votre projet, trouve les concurrents et prépare le prompt Xcode.
-        </p>
-        <ol className="ta-applab-synthesis__pipeline">
-          {PIPELINE_STEPS.map((step, i) => {
-            const done = donePipeline.includes(step.id);
-            const active = i === activePipeline && !done;
-            return (
-              <motion.li
-                key={step.id}
-                className={cn(
-                  "ta-applab-synthesis__pipeline-item",
-                  done && "is-done",
-                  active && "is-active",
-                )}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.06, duration: 0.35 }}
-              >
-                <span className="ta-applab-synthesis__pipeline-dot" aria-hidden />
-                <span>{step.label}</span>
-              </motion.li>
-            );
-          })}
-        </ol>
-      </div>
+      <TrackappApplabSynthesisLoader donePipeline={donePipeline} activePipeline={activePipeline} />
     );
   }
 
@@ -227,7 +268,11 @@ export function TrackappApplabSynthesisStep({
     return (
       <div className="ta-applab-synthesis ta-applab-synthesis--error">
         <p className="ta-applab-synthesis__error">{error}</p>
-        <button type="button" className="ta-applab-studio__btn ta-applab-studio__btn--primary" onClick={() => void runPipeline()}>
+        <button
+          type="button"
+          className="ta-applab-studio__btn ta-applab-studio__btn--primary"
+          onClick={() => void runPipeline({ force: true })}
+        >
           Relancer l&apos;analyse
         </button>
       </div>
@@ -236,109 +281,16 @@ export function TrackappApplabSynthesisStep({
 
   return (
     <div className="ta-applab-synthesis ta-applab-synthesis--reveal">
-      {draft.assessment ? (
-        <section className="ta-applab-synthesis__section">
-          <h2 className="ta-applab-synthesis__section-title">Synthèse produit</h2>
-          <p className="ta-applab-synthesis__headline">{draft.assessment.headline}</p>
-          <p className="ta-applab-synthesis__summary">{draft.assessment.summary}</p>
-          <div className="ta-applab-assessment__grid">
-            <article className="ta-applab-assessment__block">
-              <h3>Comment ça marche</h3>
-              <p>{draft.assessment.how_it_works}</p>
-            </article>
-            <article className="ta-applab-assessment__block">
-              <h3>Cible</h3>
-              <p>{draft.assessment.target_user}</p>
-            </article>
-            <article className="ta-applab-assessment__block">
-              <h3>Monétisation</h3>
-              <p>{draft.assessment.monetization}</p>
-            </article>
-            <article className="ta-applab-assessment__block">
-              <h3>Différenciation</h3>
-              <p>{draft.assessment.differentiation}</p>
-            </article>
-          </div>
-          {draft.assessment.mvp_features.length > 0 ? (
-            <article className="ta-applab-assessment__block ta-applab-assessment__block--full">
-              <h3>Fonctionnalités v1.0</h3>
-              <ul>
-                {draft.assessment.mvp_features.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
-            </article>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="ta-applab-synthesis__section">
-        <h2 className="ta-applab-synthesis__section-title">Décisions Trackapp</h2>
-        <p className="ta-applab-synthesis__section-desc">
-          Langue, techno, onboarding, paywall, login — choisis par Trackapp pour accélérer votre build.
-        </p>
-        <ul className="ta-applab-synthesis__decisions">
-          {TRACKAPP_APPLAB_AUTO_DECISIONS.map((d) => (
-            <li key={d.id} className="ta-applab-synthesis__decision">
-              <span className="ta-applab-synthesis__decision-label">{d.label}</span>
-              <span className="ta-applab-synthesis__decision-value">{d.value}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {competitors.length > 0 ? (
-        <section className="ta-applab-synthesis__section">
-          <h2 className="ta-applab-synthesis__section-title">Concurrents trouvés</h2>
-          <ul className="ta-applab-create-suggestions__list ta-applab-synthesis__competitors">
-            {competitors.slice(0, 5).map((app) => (
-              <li key={app.id}>
-                <Link
-                  href={trackappAccueilAppHref(app.id, draft.referenceCountry || "fr")}
-                  className="ta-applab-create-suggestion ta-applab-synthesis__competitor-link"
-                >
-                  <span className="ta-applab-create-suggestion__rank">#{app.rank}</span>
-                  {app.artworkUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={app.artworkUrl} alt="" className="ta-applab-create-suggestion__art" width={48} height={48} />
-                  ) : (
-                    <span className="ta-applab-create-suggestion__art ta-applab-create-suggestion__art--empty" aria-hidden />
-                  )}
-                  <span className="ta-applab-create-suggestion__body">
-                    <strong>{app.name}</strong>
-                    <span>{app.relevanceReason ?? app.category ?? app.artistName}</span>
-                  </span>
-                  <span className="ta-applab-create-suggestion__revenue">{app.revenueDisplay}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       {draft.understanding && draft.assessment ? (
-        <section className="ta-applab-synthesis__section ta-applab-synthesis__section--prompt">
-          <TrackappApplabMvpPromptExport
-            name={draft.name}
-            concept={draft.concept}
-            understanding={draft.understanding}
-            assessment={draft.assessment}
-            answers={answers}
-            questions={questions}
-            constraints={{
-              mustHave: TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS.mustHave,
-              mustNot: TRACKAPP_APPLAB_DEFAULT_CONSTRAINTS.mustNot,
-            }}
-            referenceAppId={draft.referenceAppId}
-            referenceCountry={draft.referenceCountry}
-            promptVersions={draft.promptVersions}
-            activeVersionId={draft.activePromptVersionId}
-            onVersionAdded={(version) => onDraftChange(appendPromptVersion(draft, version))}
-            onActiveVersionChange={(id) => onDraftChange({ ...draft, activePromptVersionId: id })}
-            onSyncVersion={onSyncPromptVersion}
-            onLoadingChange={onBusyChange}
-          />
-        </section>
+        <TrackappApplabSynthesisProfile
+          draft={draft}
+          competitors={competitors}
+          answers={answers}
+          questions={questions}
+          onDraftChange={onDraftChange}
+          onBusyChange={onBusyChange}
+          onSyncPromptVersion={onSyncPromptVersion}
+        />
       ) : null}
     </div>
   );

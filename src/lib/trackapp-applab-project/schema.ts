@@ -53,6 +53,21 @@ export const APPLAB_CONCEPT_CLARIFY_JSON_SCHEMA = {
   required: ["status", "understanding", "questions"],
 } as const;
 
+const APPLAB_CLIENT_PERSONA_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: { type: "string" },
+    label: { type: "string" },
+    age_range: { type: "string" },
+    profile: { type: "string" },
+    goals: { type: "string" },
+    frustrations: { type: "string" },
+    why_this_app: { type: "string" },
+  },
+  required: ["name", "label", "age_range", "profile", "goals", "frustrations", "why_this_app"],
+} as const;
+
 export const APPLAB_CONCEPT_ASSESS_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -66,6 +81,15 @@ export const APPLAB_CONCEPT_ASSESS_JSON_SCHEMA = {
     mvp_features: { type: "array", items: { type: "string" }, minItems: 5, maxItems: 8 },
     risks: { type: "array", items: { type: "string" }, maxItems: 4 },
     build_prompt_seed: { type: "string" },
+    market_insight: { type: "string" },
+    value_proposition: { type: "string" },
+    positioning: { type: "string" },
+    client_personas: {
+      type: "array",
+      minItems: 2,
+      maxItems: 3,
+      items: APPLAB_CLIENT_PERSONA_SCHEMA,
+    },
   },
   required: [
     "headline",
@@ -77,6 +101,10 @@ export const APPLAB_CONCEPT_ASSESS_JSON_SCHEMA = {
     "mvp_features",
     "risks",
     "build_prompt_seed",
+    "market_insight",
+    "value_proposition",
+    "positioning",
+    "client_personas",
   ],
 } as const;
 

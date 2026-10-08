@@ -9,11 +9,11 @@ import { isTrackappLiteFullscreenPath } from "@/lib/trackapp-lite-paths";
 import { TrackerLiquidGlassFilterSvg } from "@/components/tracker/tracker-liquid-glass-filter-svg";
 import { TrackappBodyClass } from "@/components/trackapp/trackapp-body-class";
 import { TrackappFidelitySidebar } from "@/components/trackapp/trackapp-fidelity-sidebar";
-import { TrackappLandingAuthBar } from "@/components/trackapp/trackapp-landing-auth-bar";
+import { TrackappLandingTopNav } from "@/components/trackapp/trackapp-landing-top-nav";
 import { cn } from "@/lib/utils";
 
 import "@/styles/trackapp-lab-nav.css";
-import "@/styles/trackapp-landing-auth-bar.css";
+import "@/styles/trackapp-landing-top-nav.css";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -48,7 +48,11 @@ export function TrackappFidelityWorkspaceShell({
   const pathname = usePathname() ?? "";
   const isApplabCreatePage = isTrackappCreerUneAppPath(pathname);
   const isLiteFullscreen = isTrackappLiteFullscreenPath(pathname);
+  /** Landing `/trackapp` — jamais de sidebar workspace (connecté ou non). */
+  const isLandingPage = isApplabCreatePage;
+  const hideWorkspaceChrome = isLiteFullscreen || isLandingPage;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return true;
     if (landingSidebarCollapsed(window.location.pathname)) return true;
@@ -77,6 +81,14 @@ export function TrackappFidelityWorkspaceShell({
     });
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   const closeMobile = useCallback(() => setMobileMenuOpen(false), []);
 
   useEffect(() => {
@@ -99,6 +111,8 @@ export function TrackappFidelityWorkspaceShell({
     });
   }, []);
 
+  const effectiveCollapsed = isMobile ? false : sidebarCollapsed;
+
   return (
     <>
       <TrackappBodyClass active />
@@ -106,49 +120,55 @@ export function TrackappFidelityWorkspaceShell({
         id="app-app"
         className={cn("app-unified-shell", spaceGrotesk.variable)}
         data-mobile-section="dashboard"
-        data-sidebar-expanded={sidebarCollapsed ? "false" : "true"}
+        data-sidebar-expanded={effectiveCollapsed ? "false" : "true"}
         data-route-kind={
-          isApplabCreatePage ? "applab-create" : isLiteFullscreen ? "lite-fullscreen" : "workspace"
+          isLandingPage ? "landing-guest"
+          : isLiteFullscreen ? "lite-fullscreen"
+          : "workspace"
         }
       >
         <TrackerLiquidGlassFilterSvg />
 
-        <button
-          type="button"
-          className={mobileMenuOpen ? "app-sidebar-overlay is-open" : "app-sidebar-overlay"}
-          id="app-sidebar-overlay"
-          aria-label="Fermer le menu"
-          aria-hidden={!mobileMenuOpen}
-          onClick={closeMobile}
-        />
+        {!hideWorkspaceChrome ? (
+          <>
+            <button
+              type="button"
+              className={mobileMenuOpen ? "app-sidebar-overlay is-open" : "app-sidebar-overlay"}
+              id="app-sidebar-overlay"
+              aria-label="Fermer le menu"
+              aria-hidden={!mobileMenuOpen}
+              onClick={closeMobile}
+            />
 
-        <TrackappFidelitySidebar
-          pathname={pathname}
-          mobileMenuOpen={mobileMenuOpen}
-          onNavigate={closeMobile}
-          email={email}
-          signOutHref={signOutHref}
-          loggedIn={loggedIn}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={toggleSidebarCollapsed}
-        />
+            <TrackappFidelitySidebar
+              pathname={pathname}
+              mobileMenuOpen={mobileMenuOpen}
+              onNavigate={closeMobile}
+              email={email}
+              signOutHref={signOutHref}
+              loggedIn={loggedIn}
+              collapsed={effectiveCollapsed}
+              onToggleCollapse={toggleSidebarCollapsed}
+            />
 
-        {!isApplabCreatePage && !isLiteFullscreen ? (
-          <button
-            type="button"
-            className="trackapp-mobile-menu-btn md:hidden"
-            aria-label="Ouvrir le menu"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="app-sidebar"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <span aria-hidden />
-            <span aria-hidden />
-            <span aria-hidden />
-          </button>
+            <button
+              type="button"
+              className={cn("trackapp-mobile-menu-btn", mobileMenuOpen && "is-open")}
+              aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="app-sidebar"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              <span aria-hidden />
+              <span aria-hidden />
+              <span aria-hidden />
+            </button>
+          </>
         ) : null}
 
-        {isApplabCreatePage ? <TrackappLandingAuthBar loggedIn={loggedIn} /> : null}
+        {isLandingPage ? (
+          <TrackappLandingTopNav loggedIn={loggedIn} signOutHref={signOutHref} />
+        ) : null}
 
         <main className="app-main">
           <div className="app-content">{children}</div>

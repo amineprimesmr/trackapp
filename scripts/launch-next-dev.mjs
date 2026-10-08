@@ -82,10 +82,18 @@ console.log(
   `[launch-next-dev] using ${nodeBin} (node ${spawnSync(nodeBin, ["-v"], { encoding: "utf8" }).stdout.trim()}) → http://127.0.0.1:${devPort}`,
 );
 
+const localAppUrl = `http://127.0.0.1:${devPort}`;
+
 const child = spawn(nodeBin, args, {
   cwd: root,
   stdio: "inherit",
-  env: { ...process.env, FORCE_COLOR: "1" },
+  env: {
+    ...process.env,
+    FORCE_COLOR: "1",
+    TRACKAPP_DEV_PORT: devPort,
+    // Évite redirect post-login vers :3000 (autre projet) quand Trackapp est sur un autre port
+    NEXT_PUBLIC_APP_URL: localAppUrl,
+  },
 });
 
 child.on("exit", (code, signal) => {

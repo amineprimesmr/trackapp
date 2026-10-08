@@ -14,6 +14,16 @@
   isolation: isolate;
 }
 
+/* Sentinel invisible — déclenche la bannière scroll sans pile hero (AppLAB mobile). */
+.tracker-sale-notifs-sentinel {
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .tracker-sale-notifs-stack {
   position: relative;
   width: min(21.5rem, 100%);
@@ -282,11 +292,10 @@
   position: relative;
   border-radius: 1.55rem;
   overflow: hidden;
-  background: transparent;
+  background: rgba(24, 24, 28, 0.94);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.42),
     0 4px 14px rgba(0, 0, 0, 0.28);
-  transition: opacity 0.16s ease;
 }
 
 .tracker-sale-notif-banner-glass::before {
@@ -296,7 +305,7 @@
   z-index: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: rgba(32, 32, 38, 0.28);
+  background: rgba(38, 38, 44, 0.78);
   -webkit-backdrop-filter: blur(44px) saturate(195%);
   backdrop-filter: blur(44px) saturate(195%);
   transform: translateZ(0);
@@ -321,7 +330,7 @@
   );
 }
 
-/* Safari iOS : repaint après mount (backdrop-filter ignoré au 1er frame) */
+/* Safari iOS : repaint backdrop après mount (couche opaque dessous dès frame 0) */
 .tracker-sale-notif-banner-glass--live::before {
   -webkit-backdrop-filter: blur(44px) saturate(195%);
   backdrop-filter: blur(44px) saturate(195%);
@@ -391,10 +400,14 @@
 }
 
 @media (max-width: 768px) {
+  .tracker-sale-notif-banner-glass {
+    background: rgba(22, 22, 26, 0.96);
+  }
+
   .tracker-sale-notif-banner-glass::before {
     -webkit-backdrop-filter: blur(36px) saturate(180%);
     backdrop-filter: blur(36px) saturate(180%);
-    background: rgba(32, 32, 38, 0.32);
+    background: rgba(38, 38, 44, 0.82);
   }
 }
 
@@ -406,7 +419,7 @@
   }
 }
 
-/* Entrée / sortie — opacity + top (pas de transform : casse backdrop-filter iOS) */
+/* Entrée / sortie — top uniquement (opacity casse le fond glass au 1er frame) */
 .tracker-sale-notif-banner-slot--enter {
   animation: tracker-ios-notif-drop 0.54s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
@@ -417,29 +430,24 @@
 
 @keyframes tracker-ios-notif-drop {
   0% {
-    opacity: 0;
     top: calc(max(0.45rem, env(safe-area-inset-top, 0px)) - 5.5rem);
   }
 
   58% {
-    opacity: 1;
     top: calc(max(0.45rem, env(safe-area-inset-top, 0px)) + 0.18rem);
   }
 
   100% {
-    opacity: 1;
     top: max(0.45rem, env(safe-area-inset-top, 0px));
   }
 }
 
 @keyframes tracker-ios-notif-rise {
   0% {
-    opacity: 1;
     top: max(0.45rem, env(safe-area-inset-top, 0px));
   }
 
   100% {
-    opacity: 0;
     top: calc(max(0.45rem, env(safe-area-inset-top, 0px)) - 5.5rem);
   }
 }

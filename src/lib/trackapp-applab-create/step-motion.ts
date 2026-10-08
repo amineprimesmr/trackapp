@@ -5,7 +5,7 @@ export function applabMotionTransition(reduceMotion: boolean | null, duration = 
   return { duration, ease: APPLAB_MOTION_EASE };
 }
 
-export function applabLayoutTransition(reduceMotion: boolean | null, duration = 0.58) {
+export function applabLayoutTransition(reduceMotion: boolean | null, duration = 0.22) {
   if (reduceMotion) return { duration: 0 };
   return { duration, ease: APPLAB_MOTION_EASE };
 }
@@ -32,5 +32,5 @@ export const applabFieldLayerMotion = {
 export const applabBelowMotion = {
   initial: { opacity: 0, y: 32 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: 72, scale: 0.965, filter: "blur(16px)" },
+  exit: { opacity: 0, y: 28 },
 } as const;

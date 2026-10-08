@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ShowcaseAppIcon } from "@/components/tracker/showcase-app-icon";
@@ -17,7 +17,9 @@ export type HeroRotatorApp = {
 };
 
 const INTERVAL_MS = 3000;
-const CROSSFADE_MS = 360;
+const CROSSFADE_MS = 380;
+
+type CrossfadePhase = "idle" | "entering" | "animating";
 
 function HeroIconFrame({
   app,
@@ -47,9 +49,10 @@ export function HeroAppIconRotator({
   const touch = useTouchDevice();
   const pool = apps.length > 0 ? apps : [{ id: "placeholder", name: "App", artworkUrl: undefined }];
   const [index, setIndex] = useState(0);
-  const [outgoingIndex, setOutgoingIndex] = useState<number | null>(null);
-  const [crossfading, setCrossfading] = useState(false);
+  const [prevIndex, setPrevIndex] = useState<number | null>(null);
+  const [phase, setPhase] = useState<CrossfadePhase>("idle");
   const crossfadeTimerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
   const use3D = !reduceMotion && !touch;
 
   const advance = useCallback(() => {
@@ -57,18 +60,23 @@ export function HeroAppIconRotator({
 
     setIndex((current) => {
       const next = (current + 1) % pool.length;
-      if (touch) {
-        setOutgoingIndex(current);
-        setCrossfading(true);
-        if (crossfadeTimerRef.current) window.clearTimeout(crossfadeTimerRef.current);
-        crossfadeTimerRef.current = window.setTimeout(() => {
-          setCrossfading(false);
-          setOutgoingIndex(null);
-        }, CROSSFADE_MS);
-      }
+      setPrevIndex(current);
+      setPhase("entering");
+
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = window.requestAnimationFrame(() => setPhase("animating"));
+      });
+
+      if (crossfadeTimerRef.current != null) window.clearTimeout(crossfadeTimerRef.current);
+      crossfadeTimerRef.current = window.setTimeout(() => {
+        setPrevIndex(null);
+        setPhase("idle");
+      }, CROSSFADE_MS);
+
       return next;
     });
-  }, [pool.length, reduceMotion, touch]);
+  }, [pool.length, reduceMotion]);
 
   useEffect(() => {
     if (reduceMotion || pool.length < 2) return;
@@ -78,87 +86,62 @@ export function HeroAppIconRotator({
 
   useEffect(
     () => () => {
-      if (crossfadeTimerRef.current) window.clearTimeout(crossfadeTimerRef.current);
+      if (crossfadeTimerRef.current != null) window.clearTimeout(crossfadeTimerRef.current);
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current);
     },
     [],
   );
 
   const current = pool[index];
-  const outgoing = outgoingIndex != null ? pool[outgoingIndex] : null;
+  const previous = prevIndex != null ? pool[prevIndex] : null;
+  const isCrossfading = phase !== "idle";
 
   const shellClass =
     "relative flex h-full w-full items-center justify-center overflow-hidden rounded-[22%] bg-neutral-950 shadow-[0_4px_18px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.14)]";
 
-  if (!use3D) {
-    return (
-      <span
-        className={cn(
-          "relative ml-1 mr-[0.55rem] inline-flex align-middle sm:mr-2.5 md:mr-3 [--hero-icon:2.35rem] sm:[--hero-icon:2.65rem] md:[--hero-icon:2.9rem]",
-          className,
-        )}
-        aria-hidden
-      >
-        <span className="relative inline-flex h-[var(--hero-icon)] w-[var(--hero-icon)] items-center justify-center">
-          {outgoing ? (
-            <span
-              className={cn(
-                "hero-app-icon-layer absolute inset-0",
-                crossfading && "hero-app-icon-layer--out",
-              )}
-            >
-              <span className={shellClass}>
-                <HeroIconFrame app={outgoing} />
-              </span>
-            </span>
-          ) : null}
-          <span
-            key={`${current.id}-${index}`}
-            className={cn(
-              "hero-app-icon-layer absolute inset-0 hero-app-icon-layer--in-from",
-              crossfading && "hero-app-icon-layer--in",
-            )}
-          >
-            <span className={shellClass}>
-              <HeroIconFrame app={current} priority />
-            </span>
-          </span>
-        </span>
-      </span>
-    );
-  }
-
   return (
     <span
       className={cn(
-        "relative ml-1 mr-[0.55rem] inline-flex align-middle sm:mr-2.5 md:mr-3 [--hero-icon:2.35rem] sm:[--hero-icon:2.65rem] md:[--hero-icon:2.9rem]",
+        "hero-app-icon-rotator relative ml-1 mr-[0.55rem] inline-flex align-middle sm:mr-2.5 md:mr-3 [--hero-icon:2.35rem] sm:[--hero-icon:2.65rem] md:[--hero-icon:2.9rem]",
         className,
       )}
-      style={{ perspective: "960px" }}
+      style={use3D ? { perspective: "960px" } : undefined}
       aria-hidden
     >
       <span
-        className="relative inline-flex h-[var(--hero-icon)] w-[var(--hero-icon)] items-center justify-center"
-        style={{ transformStyle: "preserve-3d" }}
+        className="hero-app-icon-stage relative inline-flex h-[var(--hero-icon)] w-[var(--hero-icon)] items-center justify-center"
+        style={use3D ? { transformStyle: "preserve-3d" } : undefined}
       >
-        <span className={shellClass}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={`${current.id}-${index}`}
-              className="absolute inset-0 flex items-center justify-center"
-              initial={{ opacity: 0, rotateY: -42, scale: 0.82 }}
-              animate={{ opacity: 1, rotateY: 0, scale: 1 }}
-              exit={{ opacity: 0, rotateY: 42, scale: 0.82 }}
-              transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
-              style={{ transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
-            >
-              <HeroIconFrame app={current} />
-            </motion.span>
-          </AnimatePresence>
+        {previous ? (
           <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-[22%] bg-gradient-to-br from-white/12 via-transparent to-transparent opacity-30"
-          />
+            className={cn(
+              "hero-app-icon-layer absolute inset-0 z-[1]",
+              use3D && "hero-app-icon-layer--3d",
+              "hero-app-icon-layer--in",
+              phase === "animating" && "hero-app-icon-layer--out",
+            )}
+          >
+            <span className={shellClass}>
+              <HeroIconFrame app={previous} />
+            </span>
+          </span>
+        ) : null}
+        <span
+          className={cn(
+            "hero-app-icon-layer absolute inset-0 z-[2]",
+            use3D && "hero-app-icon-layer--3d",
+            isCrossfading && "hero-app-icon-layer--in-from",
+            !isCrossfading || phase === "animating" ? "hero-app-icon-layer--in" : null,
+          )}
+        >
+          <span className={shellClass}>
+            <HeroIconFrame app={current} priority />
+          </span>
         </span>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[3] rounded-[22%] bg-gradient-to-br from-white/12 via-transparent to-transparent opacity-30"
+        />
       </span>
     </span>
   );

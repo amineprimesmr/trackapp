@@ -78,6 +78,7 @@ export function TrackappApplabMvpPromptExport({
   onActiveVersionChange,
   onLoadingChange,
   onSyncVersion,
+  onPromptTextChange,
 }: Readonly<{
   name: string;
   concept: string;
@@ -94,6 +95,8 @@ export function TrackappApplabMvpPromptExport({
   onActiveVersionChange: (id: string) => void;
   onLoadingChange?: (busy: boolean) => void;
   onSyncVersion?: (version: ApplabPromptVersion) => void;
+  /** Sync texte affiché (carte « Prompt Xcode » au-dessus) pendant/après génération. */
+  onPromptTextChange?: (fullPrompt: string) => void;
 }>) {
   const [bundle, setBundle] = useState<ApplabMvpPromptBundle | null>(null);
   const [loading, setLoading] = useState(false);
@@ -161,9 +164,10 @@ export function TrackappApplabMvpPromptExport({
         }
 
         setBundle(data.bundle);
-        onVersionAdded(data.bundle.promptVersion);
-        onActiveVersionChange(data.bundle.promptVersion.id);
-        onSyncVersion?.(data.bundle.promptVersion);
+        const version = data.bundle.promptVersion;
+        onVersionAdded(version);
+        onPromptTextChange?.(version.fullPrompt);
+        onSyncVersion?.(version);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur réseau");
       } finally {
@@ -177,7 +181,7 @@ export function TrackappApplabMvpPromptExport({
       concept,
       constraints,
       name,
-      onActiveVersionChange,
+      onPromptTextChange,
       onSyncVersion,
       onVersionAdded,
       promptVersions.length,
@@ -204,6 +208,10 @@ export function TrackappApplabMvpPromptExport({
 
   const fullPrompt = displayVersion?.fullPrompt ?? "";
   const quality = displayVersion?.quality;
+
+  useEffect(() => {
+    onPromptTextChange?.(fullPrompt);
+  }, [fullPrompt, onPromptTextChange]);
 
   const handleCopy = async () => {
     if (!fullPrompt) return;

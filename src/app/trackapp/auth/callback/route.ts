@@ -2,7 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
 import { TRACKAPP_WORKSPACE_HUB_PATH } from "@/lib/trackapp-apptracker-paths";
+import { claimPostPaymentPremium, hasPostPaymentCookie, POST_PAYMENT_COOKIE } from "@/lib/trackapp/post-payment-cookie";
 import { ensureTrackappProfileRow } from "@/lib/trackapp-profile-favorites-store";
+import { resolveTrackappRedirectOrigin } from "@/lib/trackapp/request-origin";
 
 /**
  * OAuth / magic-link Supabase (PKCE) — à ajouter dans Supabase Redirect URLs :
@@ -11,7 +13,7 @@ import { ensureTrackappProfileRow } from "@/lib/trackapp-profile-favorites-store
  * http://127.0.0.1:3000/trackapp/auth/callback
  */
 export async function GET(request: NextRequest) {
-  const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? new URL(request.url).origin;
+  const origin = resolveTrackappRedirectOrigin(request);
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const nextRaw = url.searchParams.get("next");
@@ -55,6 +57,11 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (user) {
     await ensureTrackappProfileRow(supabase, user.id);
+    const postPayment = hasPostPaymentCookie(request.cookies.get(POST_PAYMENT_COOKIE)?.value);
+    if (postPayment) {
+      await claimPostPaymentPremium(user.id);
+      response.cookies.set(POST_PAYMENT_COOKIE, "", { maxAge: 0, path: "/" });
+    }
   }
 
   return response;

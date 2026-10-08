@@ -885,16 +885,13 @@ function parseIosAggregateRow(
   };
 }
 
-/** Un seul appel ST pour N apps (recherche live — ~500 ms au lieu de N×3 s). */
-export async function fetchIosAggregateAppMetricsBatch(
-  appIds: readonly string[],
-  options?: Readonly<{ timeoutMs?: number }>,
-): Promise<Map<string, IosAggregateAppMetrics>> {
-  const ids = [...new Set(appIds.map((id) => String(id).trim()).filter(Boolean))];
+async function fetchIosAggregateAppMetricsBatchOnce(
+  ids: readonly string[],
+  timeoutMs: number,
+): Promise<{ map: Map<string, IosAggregateAppMetrics>; status: number }> {
   const out = new Map<string, IosAggregateAppMetrics>();
-  if (ids.length === 0) return out;
+  if (ids.length === 0) return { map: out, status: 200 };
 
-  const timeoutMs = options?.timeoutMs ?? IOS_AGG_BATCH_FETCH_MS;
   try {
     const res = await fetch(
       `https://app.sensortower.com/api/ios/apps?app_ids=${ids.join(",")}`,
@@ -907,16 +904,60 @@ export async function fetchIosAggregateAppMetricsBatch(
         signal: AbortSignal.timeout(timeoutMs),
       },
     );
-    if (!res.ok) return out;
+    if (!res.ok) return { map: out, status: res.status };
     const data = (await res.json()) as { apps?: Record<string, unknown>[] };
     for (const row of data.apps ?? []) {
       const parsed = parseIosAggregateRow(row, ids.length === 1 ? ids[0] : undefined);
       const key = String(row.app_id ?? (ids.length === 1 ? ids[0] : ""));
       if (parsed && key) out.set(key, parsed);
     }
+    return { map: out, status: res.status };
   } catch {
-    /* ignore */
+    return { map: out, status: 0 };
   }
+}
+
+/** Un seul appel ST pour N apps (recherche live — ~500 ms au lieu de N×3 s). */
+export async function fetchIosAggregateAppMetricsBatch(
+  appIds: readonly string[],
+  options?: Readonly<{ timeoutMs?: number }>,
+): Promise<Map<string, IosAggregateAppMetrics>> {
+  const ids = [...new Set(appIds.map((id) => String(id).trim()).filter(Boolean))];
+  if (ids.length === 0) return new Map();
+
+  const timeoutMs = options?.timeoutMs ?? IOS_AGG_BATCH_FETCH_MS;
+  let { map, status } = await fetchIosAggregateAppMetricsBatchOnce(ids, timeoutMs);
+
+  if (map.size === 0 && (status === 429 || status === 0)) {
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    ({ map } = await fetchIosAggregateAppMetricsBatchOnce(ids, timeoutMs));
+  }
+
+  return map;
+}
+
+/** Batch ST par petits paquets (évite HTTP 429 quand la recherche enrichit 20+ apps). */
+export async function fetchIosAggregateAppMetricsBatchChunked(
+  appIds: readonly string[],
+  options?: Readonly<{ chunkSize?: number; delayMs?: number; timeoutMs?: number }>,
+): Promise<Map<string, IosAggregateAppMetrics>> {
+  const ids = [...new Set(appIds.map((id) => String(id).trim()).filter(Boolean))];
+  const out = new Map<string, IosAggregateAppMetrics>();
+  if (ids.length === 0) return out;
+
+  const chunkSize = Math.min(Math.max(options?.chunkSize ?? 4, 1), 8);
+  const delayMs = options?.delayMs ?? 320;
+  const timeoutMs = options?.timeoutMs;
+
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const chunkMap = await fetchIosAggregateAppMetricsBatch(chunk, { timeoutMs });
+    chunkMap.forEach((value, key) => out.set(key, value));
+    if (i + chunkSize < ids.length && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
   return out;
 }
 

@@ -15,10 +15,12 @@ import {
   nextIrregularSaleDelayMs,
 } from "@/lib/sale-notification-schedule";
 import { useTouchDevice } from "@/lib/use-touch-device";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 import "@/styles/tracker-sale-notifications.css";
 
 const PAYMENT_HREF = "/trackapp/paiement";
+const MOBILE_VIEWPORT_MQ = "(max-width: 860px)";
 
 type BannerPhase = "enter" | "shown" | "exit";
 
@@ -30,12 +32,19 @@ type ActiveBanner = {
 type TrackerMobileSaleNotificationBannerProps = {
   /** Active quand la pile hero n’est plus visible à l’écran. */
   active: boolean;
+  /** Landing AppLAB : autoriser aussi viewport ≤860px (DevTools / scroll document). */
+  allowMobileViewport?: boolean;
 };
 
 export function TrackerMobileSaleNotificationBanner({
   active,
+  allowMobileViewport = false,
 }: TrackerMobileSaleNotificationBannerProps) {
   const touch = useTouchDevice();
+  const mobileViewport = useMediaQuery(MOBILE_VIEWPORT_MQ, {
+    defaultMatches: allowMobileViewport,
+  });
+  const canShow = touch || (allowMobileViewport && mobileViewport);
   const [mounted, setMounted] = useState(false);
   const [banner, setBanner] = useState<ActiveBanner | null>(null);
   const [glassLive, setGlassLive] = useState(false);
@@ -46,7 +55,7 @@ export function TrackerMobileSaleNotificationBanner({
   const lifecycleRef = useRef(0);
   activeRef.current = active;
   bannerRef.current = banner;
-  touchRef.current = touch;
+  touchRef.current = canShow;
 
   useEffect(() => setMounted(true), []);
 
@@ -55,9 +64,9 @@ export function TrackerMobileSaleNotificationBanner({
       setGlassLive(false);
       return;
     }
-    setGlassLive(false);
+    setGlassLive(true);
     const id = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setGlassLive(true));
+      setGlassLive(true);
     });
     return () => window.cancelAnimationFrame(id);
   }, [banner?.sale.id, banner?.phase]);
@@ -110,7 +119,7 @@ export function TrackerMobileSaleNotificationBanner({
   }, []);
 
   useEffect(() => {
-    if (!touch || !active) {
+    if (!canShow || !active) {
       lifecycleRef.current += 1;
       setBanner(null);
       return;
@@ -143,9 +152,9 @@ export function TrackerMobileSaleNotificationBanner({
       window.clearTimeout(timeoutId);
       setBanner(null);
     };
-  }, [active, touch, showBanner]);
+  }, [active, canShow, showBanner]);
 
-  if (!mounted || !touch || !banner) return null;
+  if (!mounted || !canShow || !banner) return null;
 
   const bannerNode = (
     <div

@@ -106,6 +106,18 @@ function bulletList(items: readonly string[], fallback = "—"): string {
   return items.map((x) => `- ${x}`).join("\n");
 }
 
+function uniqueStrings(items: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const key = item.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item.trim());
+  }
+  return out;
+}
+
 function formatScreens(blueprint: ApplabMvpPromptBlueprint): string {
   return blueprint.screens
     .map(
@@ -231,9 +243,9 @@ function buildContext(input: ApplabMvpPromptInput, blueprint: ApplabMvpPromptBlu
   return {
     input,
     blueprint,
-    negatives: [...STATIC_NEGATIVE, ...blueprint.negative_prompts],
-    rules: [...STATIC_RULES, ...fixedRules, ...blueprint.coding_rules],
-    apple: [...STATIC_APPLE, ...blueprint.apple_compliance],
+    negatives: uniqueStrings([...STATIC_NEGATIVE, ...blueprint.negative_prompts]),
+    rules: uniqueStrings([...STATIC_RULES, ...fixedRules, ...blueprint.coding_rules]),
+    apple: uniqueStrings([...STATIC_APPLE, ...blueprint.apple_compliance]),
   };
 }
 
@@ -251,10 +263,29 @@ export function buildProductSpecMd(ctx: BuildCtx): string {
     blueprint.value_proposition,
     "",
     "## Persona & cible",
-    `- **Cible :** ${understanding.target_user}`,
+    `- **Cible :** ${assessment.target_user || understanding.target_user}`,
     `- **Problème :** ${understanding.core_problem}`,
     `- **Use case :** ${understanding.main_use_case}`,
     `- **Niche :** ${understanding.niche}`,
+    `- **Proposition de valeur :** ${assessment.value_proposition || assessment.headline}`,
+    `- **Positionnement :** ${assessment.positioning || assessment.differentiation}`,
+    "",
+    "### Insight marché",
+    assessment.market_insight || assessment.summary,
+    "",
+    ...(assessment.client_personas?.length
+      ? [
+          "### Avatars clients",
+          ...assessment.client_personas.flatMap((p) => [
+            `#### ${p.name} — ${p.label} (${p.age_range})`,
+            p.profile,
+            `- Objectifs: ${p.goals}`,
+            `- Frustrations: ${p.frustrations}`,
+            `- Pourquoi cette app: ${p.why_this_app}`,
+            "",
+          ]),
+        ]
+      : []),
     "",
     "## Concept",
     concept,
@@ -437,8 +468,9 @@ export function buildAppStoreMd(ctx: BuildCtx): string {
 }
 
 export function buildMasterPromptMd(ctx: BuildCtx): string {
-  const { input, blueprint, rules, negatives } = ctx;
-  const { projectName, concept, stack, understanding, assessment, clarifications } = input;
+  const { input, blueprint } = ctx;
+  const { projectName, understanding, assessment, clarifications } = input;
+  const hasClarifications = clarifications.trim().length > 0;
 
   return [
     "# PROMPT APP STORE COMPLET — SwiftUI + Xcode",
@@ -446,14 +478,14 @@ export function buildMasterPromptMd(ctx: BuildCtx): string {
     "Tu es **lead product engineer iOS** (product + UX + architecture + implémentation + release).",
     `Livrer une **app v1.0 production-ready**, soumissible à **App Store Review**, pour **${blueprint.app_working_name}**.`,
     "",
-    "Ce prompt **unique** contient toute la spec : produit, funnel UX, ressources Trackapp, architecture, conformité Apple et checklist soumission.",
+    "Ce prompt contient la spec complète en sections : PRODUCT_SPEC, UX_FLOWS, RESOURCES, ARCHITECTURE, APP_STORE.",
     "Objectif final : **accueillir de vrais utilisateurs** — pas un prototype ni un MVP jetable.",
     "",
-    "## Règles non négociables",
-    bulletList(rules.slice(0, 5)),
-    "",
-    "## Negative prompts",
-    bulletList(negatives),
+    "## Règles non négociables (résumé)",
+    "- SwiftUI + Firebase + RevenueCat — stack imposée (détail dans ARCHITECTURE).",
+    "- Funnel welcome → onboarding → paywall → winback → home (détail dans UX_FLOWS).",
+    "- Zéro placeholder UI en release ; états loading/empty/error partout.",
+    "- Règles complètes, negative prompts et conformité Apple : voir sections ARCHITECTURE et APP_STORE.",
     "",
     formatConstraintsBlock(input) ?? null,
     "",
@@ -463,13 +495,11 @@ export function buildMasterPromptMd(ctx: BuildCtx): string {
     `- Projet : ${projectName}`,
     `- One-liner : ${blueprint.one_liner}`,
     "",
-    concept,
-    "",
-    clarifications.trim() || "—",
+    hasClarifications ? clarifications.trim() : `—\n${input.concept.trim()}`,
     "",
     `- Cible : ${understanding.target_user}`,
     `- Niche : ${understanding.niche}`,
-    `- Fonctionnalités v1.0 : ${assessment.mvp_features.join(" · ")}`,
+    `- Fonctionnalités v1.0 : ${uniqueStrings(assessment.mvp_features).join(" · ")}`,
     "",
     "## Stack (imposée — aucun choix utilisateur)",
     APPLAB_TECH_STACK_ONE_LINER,

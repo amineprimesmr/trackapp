@@ -89,9 +89,9 @@ export async function POST(req: Request) {
 
     if (isElements) {
       sessionParams.ui_mode = "elements";
-      sessionParams.return_url = `${origin}/trackapp/activation?session_id={CHECKOUT_SESSION_ID}`;
+      sessionParams.return_url = `${origin}/trackapp/merci?session_id={CHECKOUT_SESSION_ID}`;
     } else {
-      sessionParams.success_url = `${origin}/trackapp/activation?session_id={CHECKOUT_SESSION_ID}`;
+      sessionParams.success_url = `${origin}/trackapp/merci?session_id={CHECKOUT_SESSION_ID}`;
       sessionParams.cancel_url = `${origin}/trackapp/paiement`;
     }
 

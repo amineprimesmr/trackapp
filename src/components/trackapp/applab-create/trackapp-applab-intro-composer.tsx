@@ -40,7 +40,7 @@ export function TrackappApplabIntroComposer({
           className="ta-applab-glass-panel__field"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
-          placeholder="Le nom de votre app..."
+          placeholder="Lancer mon app"
           maxLength={80}
           autoFocus
           onKeyDown={(e) => {

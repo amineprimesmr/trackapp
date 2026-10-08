@@ -33,7 +33,6 @@ const IconChevronRight = () => (
 
 const SUBLINKS = [
   { href: "/trackapp/favoris/apps", label: "Apps" },
-  { href: "/trackapp/favoris/ressources", label: "Ressources" },
 ] as const;
 
 export function TrackappSidebarFavoritesGroup({

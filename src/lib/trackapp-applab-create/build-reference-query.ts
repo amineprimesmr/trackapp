@@ -49,8 +49,19 @@ function normalizeToken(raw: string): string {
     .trim();
 }
 
+const FITNESS_REFERENCE_QUERIES = [
+  "apple watch fitness",
+  "health tracking workout",
+  "activity tracker",
+] as const;
+
 /** Extrait des requêtes App Store à partir du concept décrit par l'utilisateur. */
 export function buildReferenceSearchQueries(concept: string, projectName?: string): string[] {
+  const fitnessTracking =
+    /apple\s*watch|watchos|wearable|tracking|tracker|sant[eé]|health|bevel|gentler|workout|fitness/i.test(
+      concept,
+    );
+
   const cleaned = concept
     .replace(/[€$—–\-,;:.!?()[\]"']/g, " ")
     .replace(/\d+[,\.]?\d*\s*(€|eur|mois|usd)?/gi, " ")
@@ -87,5 +98,9 @@ export function buildReferenceSearchQueries(concept: string, projectName?: strin
     }
   }
 
-  return [...terms].filter(Boolean).slice(0, 6);
+  if (fitnessTracking) {
+    for (const q of FITNESS_REFERENCE_QUERIES) terms.add(q);
+  }
+
+  return [...terms].filter(Boolean).slice(0, 8);
 }

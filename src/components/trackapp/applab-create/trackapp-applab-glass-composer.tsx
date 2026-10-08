@@ -2,10 +2,10 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 
+import { TrackappApplabComposerSubmit } from "@/components/trackapp/applab-create/trackapp-applab-composer-submit";
 import {
   applabFieldLayerMotion,
   applabFieldTransition,
-  applabLayoutTransition,
 } from "@/lib/trackapp-applab-create/step-motion";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ export function TrackappApplabGlassComposer({
   onContinue,
   continueLabel = "Continuer",
   busy = false,
+  hideSubmit = false,
   reduceMotion,
   footer,
   children,
@@ -30,30 +31,30 @@ export function TrackappApplabGlassComposer({
   onContinue: () => void;
   continueLabel?: string;
   busy?: boolean;
+  hideSubmit?: boolean;
   reduceMotion: boolean | null;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }>) {
-  const layoutT = applabLayoutTransition(reduceMotion);
   const fieldTransition = applabFieldTransition(reduceMotion);
   const layerKey = fieldKey ?? "glass-field";
+  const reserveCtaSpace = area || expanded;
 
   return (
-    <motion.div layout className="ta-applab-composer-slot" transition={layoutT}>
-      <motion.div
-        layout
+    <div className="ta-applab-composer-slot">
+      <div
         className={cn(
           "ta-applab-glass-panel",
           expanded ? "ta-applab-glass-panel--expanded" : "ta-applab-glass-panel--compact",
           stacked && "ta-applab-glass-panel--stacked",
         )}
-        transition={layoutT}
       >
-        <div className={cn("ta-applab-glass-panel__row", stacked && "ta-applab-glass-panel__row--stack")}>
+        <div className={cn("ta-applab-glass-panel__body", stacked && "ta-applab-glass-panel__body--stack")}>
           <div
             className={cn(
               "ta-applab-glass-panel__editor",
               "ta-applab-glass-panel__editor--morph",
+              reserveCtaSpace && "ta-applab-glass-panel__editor--cta-space",
               (area || expanded) && "ta-applab-glass-panel__editor--area",
               stacked && "ta-applab-glass-panel__editor--scroll",
             )}
@@ -70,20 +71,25 @@ export function TrackappApplabGlassComposer({
             </AnimatePresence>
           </div>
 
-          <aside className={cn("ta-applab-glass-panel__aside", stacked && "ta-applab-glass-panel__aside--stack")}>
-            <button
-              type="button"
-              className="ta-applab-glass-panel__cta"
-              disabled={!canContinue || busy}
-              onClick={onContinue}
+          {hideSubmit ? null : (
+            <div
+              className={cn(
+                "ta-applab-glass-panel__cta-bar",
+                stacked && "ta-applab-glass-panel__cta-bar--stack",
+              )}
             >
-              <span className="ta-applab-glass-panel__cta-label">{busy ? "…" : continueLabel}</span>
-            </button>
-          </aside>
+              <TrackappApplabComposerSubmit
+                disabled={!canContinue}
+                busy={busy}
+                onClick={onContinue}
+                label={continueLabel}
+              />
+            </div>
+          )}
         </div>
 
         {footer ? <div className="ta-applab-glass-panel__footer">{footer}</div> : null}
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

@@ -13,10 +13,9 @@ import type {
 } from "@/lib/trackapp-applab-project/types";
 import type { CountryCode } from "@/lib/apple-charts";
 
-/** Sans OPENAI_API_KEY en local, on génère une synthèse heuristique (prod Vercel inchangée). */
+/** Fallback heuristique désactivé — la synthèse et le prompt exigent OPENAI_API_KEY. */
 export function shouldUseApplabLocalDevFallback(): boolean {
-  if (process.env.OPENAI_API_KEY?.trim()) return false;
-  return process.env.VERCEL_ENV !== "production";
+  return false;
 }
 
 export function buildLocalApplabConceptAssessment(input: {
@@ -27,20 +26,24 @@ export function buildLocalApplabConceptAssessment(input: {
   const name = input.name.trim();
   const concept = input.concept.trim();
   const u = input.understanding;
+  const target = u.target_user.trim() || "Utilisateurs mobiles exigeants du segment";
 
   return {
-    headline: name,
-    summary: concept,
+    headline: `${name} — ${concept.slice(0, 72)}`,
+    summary: `${concept} Le marché mobile sur ce segment reste actif: les utilisateurs cherchent une expérience guidée, premium et immédiatement utile.`,
+    market_insight: `Le segment « ${u.niche || concept} » combine une demande récurrente et des alternatives souvent trop généralistes. Une app focalisée sur ${u.main_use_case || concept} peut capter une audience prête à payer si la valeur est démontrée avant le paywall.`,
+    value_proposition: `${name} aide ${target.split(".")[0]?.toLowerCase() || "la cible"} à obtenir un résultat concret plus vite, avec une expérience iOS fluide et un suivi clair.`,
+    positioning: `Positionnement niche premium: plus spécialisé que les apps généralistes, plus simple à adopter qu'une solution fragmentée — ${u.core_problem}.`,
     how_it_works: [
       `L'utilisateur découvre ${name} via un welcome puis un onboarding court.`,
       `Le cœur de l'app : ${u.main_use_case || concept}.`,
       `Le paywall s'affiche après la première victoire utilisateur (décision Trackapp).`,
     ].join(" "),
-    target_user: u.target_user,
+    target_user: target,
     monetization: u.monetization,
     differentiation: [
       `Répond à : ${u.core_problem}.`,
-      `Cible précise : ${u.target_user}.`,
+      `Cible précise : ${target}.`,
       `Funnel Trackapp prêt App Store (SwiftUI, Firebase, RevenueCat).`,
     ].join(" "),
     mvp_features: u.key_features.length > 0 ? u.key_features : [u.main_use_case || concept],
@@ -49,7 +52,27 @@ export function buildLocalApplabConceptAssessment(input: {
       "Rétention si la valeur n'est pas démontrée avant le paywall",
       "Conformité App Review (IAP, privacy, Sign in with Apple)",
     ],
-    build_prompt_seed: `${concept} · ${u.core_problem}`,
+    build_prompt_seed: `${concept} · ${u.core_problem} · Cible: ${target}`,
+    client_personas: [
+      {
+        name: "Alex",
+        label: "Utilisateur principal",
+        age_range: "25–38 ans",
+        profile: target,
+        goals: `Progresser sur ${u.main_use_case || concept} avec un parcours simple et mesurable.`,
+        frustrations: "Les apps existantes sont trop généralistes ou demandent trop de configuration.",
+        why_this_app: `${name} propose un parcours guidé aligné sur son besoin: ${u.core_problem}.`,
+      },
+      {
+        name: "Camille",
+        label: "Utilisatrice exigeante",
+        age_range: "22–34 ans",
+        profile: "Habituée aux apps premium iOS, sensible au design et à la clarté du onboarding.",
+        goals: "Voir la valeur dès la première session et garder une routine sans friction.",
+        frustrations: "Abandonne si le produit reste flou ou si le paywall arrive trop tôt.",
+        why_this_app: `La promesse de ${name} est concrète, avec un funnel pensé pour démontrer le bénéfice avant l'abonnement.`,
+      },
+    ],
   };
 }
 

@@ -13,6 +13,13 @@ import {
 } from "@/lib/apple-charts";
 import { applyTrackappAppDisplayOverride } from "@/lib/trackapp-app-display-overrides";
 import {
+  mergeProdProxyIntoMetrics,
+  fetchDisplayMetricsFromProdProxy,
+  isTrackappMetricsDevProxyEnabled,
+  patchMetricsMapWithDevProdProxy,
+  patchMetricsWithDevProdProxy,
+} from "@/lib/trackapp-metrics-dev-proxy";
+import {
   finalizeTrackappDownloadsLabel,
   finalizeTrackappRevenueEurLabel,
   formatTrackappDownloadsDisplay,
@@ -314,33 +321,14 @@ export async function enrichSearchResultsWithTrackappMetrics(
 ): Promise<SearchResultWithTrackappMetrics[]> {
   if (apps.length === 0) return [];
 
-  const metricsMap = await resolveTrackappAppsDisplayMetricsBatch(
-    apps.map((app) => app.id),
-    country,
-  );
-
-  return apps.map((app) => ({
-    ...app,
-    trackappMetrics: metricsMap.get(app.id) ?? METRICS_TO_FIX,
-  }));
-}
-
-/**
- * Recherche live Accueil : un seul batch Sensor Tower pour toutes les apps (rapide).
- */
-export async function enrichSearchResultsWithTrackappMetricsForLiveSearch(
-  apps: readonly SearchResult[],
-  country: CountryCode,
-): Promise<SearchResultWithTrackappMetrics[]> {
-  if (apps.length === 0) return [];
-
-  const { fetchIosAggregateAppMetricsBatch } = await import("@/lib/apple-charts");
-  const aggMap = await fetchIosAggregateAppMetricsBatch(
+  const { fetchIosAggregateAppMetricsBatchChunked } = await import("@/lib/apple-charts");
+  const enrichedNationalTop = await getEnrichedNationalTopCached(country);
+  const aggMap = await fetchIosAggregateAppMetricsBatchChunked(
     apps.map((a) => a.id),
-    { timeoutMs: 8_000 },
+    { chunkSize: 3, delayMs: 650, timeoutMs: 14_000 },
   );
 
-  return apps.map((app) => ({
+  let results = apps.map((app) => ({
     ...app,
     trackappMetrics: computeTrackappAppDisplayMetrics(
       {
@@ -351,9 +339,39 @@ export async function enrichSearchResultsWithTrackappMetricsForLiveSearch(
       },
       country,
       aggMap.get(app.id) ?? null,
-      null,
+      chartRankForApp(app.id, app.categoryId, enrichedNationalTop),
     ),
   }));
+
+  if (isTrackappMetricsDevProxyEnabled()) {
+    const missingIds = results
+      .filter((r) => r.trackappMetrics.metricSource === "donnée à corriger")
+      .map((r) => r.id);
+    if (missingIds.length > 0) {
+      const proxy = await fetchDisplayMetricsFromProdProxy(missingIds, country);
+      if (proxy.size > 0) {
+        results = results.map((app) => ({
+          ...app,
+          trackappMetrics: mergeProdProxyIntoMetrics(
+            app.trackappMetrics,
+            proxy.get(app.id),
+          ),
+        }));
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Recherche live Accueil : batch Sensor Tower par paquets + rang Top 100.
+ */
+export async function enrichSearchResultsWithTrackappMetricsForLiveSearch(
+  apps: readonly SearchResult[],
+  country: CountryCode,
+): Promise<SearchResultWithTrackappMetrics[]> {
+  return enrichSearchResultsWithTrackappMetrics(apps, country);
 }
 
 /** Métriques batch pour enrichissement client (2ᵉ phase recherche). */
@@ -364,8 +382,12 @@ export async function resolveTrackappMetricsForAppIds(
   const unique = [...new Set(appIds.filter(Boolean))];
   if (unique.length === 0) return new Map();
 
-  const { fetchIosAggregateAppMetricsBatch } = await import("@/lib/apple-charts");
-  const aggMap = await fetchIosAggregateAppMetricsBatch(unique, { timeoutMs: 8_000 });
+  const { fetchIosAggregateAppMetricsBatchChunked } = await import("@/lib/apple-charts");
+  const aggMap = await fetchIosAggregateAppMetricsBatchChunked(unique, {
+    chunkSize: 4,
+    delayMs: 280,
+    timeoutMs: 10_000,
+  });
 
   const out = new Map<string, TrackappAppDisplayMetrics>();
   for (const id of unique) {
@@ -379,7 +401,7 @@ export async function resolveTrackappMetricsForAppIds(
       ),
     );
   }
-  return out;
+  return patchMetricsMapWithDevProdProxy(out, country);
 }
 
 /** Fiche détail — cache ST (pas d’estimation). */
@@ -387,7 +409,8 @@ export async function metricsForApptrackerDetailPage(
   appId: string,
   country: CountryCode,
 ): Promise<TrackappAppDisplayMetrics> {
-  return getTrackappAppDisplayMetricsCached(appId, country);
+  const metrics = await getTrackappAppDisplayMetricsCached(appId, country);
+  return patchMetricsWithDevProdProxy(metrics, appId, country);
 }
 
 /** Même agrégat ST que `loadTrackerAppEmbedContext` (fiche Accueil). */

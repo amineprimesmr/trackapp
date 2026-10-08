@@ -1,13 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { loadOnboardingProfile } from "@/lib/trackapp-onboarding/profile-store";
-import type { TrackappUserOnboardingPayload } from "@/lib/trackapp-onboarding/types";
+import type {
+  TrackappOnboardingPageProps,
+  TrackappUserOnboardingPayload,
+} from "@/lib/trackapp-onboarding/types";
 
-export type TrackappOnboardingPageProps = Readonly<{
-  initialPayload: TrackappUserOnboardingPayload | null;
-  initialCompleted: boolean;
-  loggedIn: boolean;
-  alreadyPremium: boolean;
-}>;
+export type { TrackappOnboardingPageProps } from "@/lib/trackapp-onboarding/types";
+export { GUEST_ONBOARDING_PAGE_PROPS } from "@/lib/trackapp-onboarding/types";
 
 export async function loadTrackappOnboardingPageProps(): Promise<TrackappOnboardingPageProps> {
   const sb = await createClient();
@@ -18,8 +17,9 @@ export async function loadTrackappOnboardingPageProps(): Promise<TrackappOnboard
 
   if (sb) {
     const {
-      data: { user },
-    } = await sb.auth.getUser();
+      data: { session },
+    } = await sb.auth.getSession();
+    const user = session?.user;
     if (user) {
       loggedIn = true;
       const state = await loadOnboardingProfile(sb, user.id);

@@ -20,6 +20,16 @@ export type ApplabClarifyingQuestion = Readonly<{
   hint?: string;
 }>;
 
+export type ApplabClientPersona = Readonly<{
+  name: string;
+  label: string;
+  age_range: string;
+  profile: string;
+  goals: string;
+  frustrations: string;
+  why_this_app: string;
+}>;
+
 export type ApplabConceptAssessment = Readonly<{
   headline: string;
   summary: string;
@@ -30,6 +40,10 @@ export type ApplabConceptAssessment = Readonly<{
   mvp_features: readonly string[];
   risks: readonly string[];
   build_prompt_seed: string;
+  market_insight: string;
+  value_proposition: string;
+  positioning: string;
+  client_personas: readonly ApplabClientPersona[];
 }>;
 
 export type ApplabConceptClarifyStatus = "needs_clarification" | "ready_to_assess";

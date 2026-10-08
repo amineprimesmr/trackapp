@@ -1,12 +1,22 @@
-import { unstable_cache } from "next/cache";
-
-import { normalizeTrackerCountryParam, searchApps, type CountryCode, type SearchResult } from "@/lib/apple-charts";
+import {
+  fetchEnrichedTopFree,
+  normalizeTrackerCountryParam,
+  searchApps,
+  type AppEntry,
+  type CountryCode,
+  type SearchResult,
+} from "@/lib/apple-charts";
 import {
   enrichSearchResultsWithTrackappMetrics,
   type SearchResultWithTrackappMetrics,
 } from "@/lib/trackapp-app-display-metrics";
+import { pickMonetizingSearchResults } from "@/lib/trackapp-smart-search/filter-monetizing-apps";
 import { expandSearchQueries, isGenericDiscoveryQuery } from "@/lib/trackapp-smart-search/keyword-expansion";
-import { sortSearchResults, type TrackappSearchSort } from "@/lib/trackapp-smart-search/rank-results";
+import {
+  relevanceScore,
+  sortSearchResults,
+  type TrackappSearchSort,
+} from "@/lib/trackapp-smart-search/rank-results";
 
 export type SmartSearchResult = Readonly<{
   apps: SearchResultWithTrackappMetrics[];
@@ -14,6 +24,37 @@ export type SmartSearchResult = Readonly<{
   sort: TrackappSearchSort;
   expanded: boolean;
 }>;
+
+function appEntryToSearchResult(app: AppEntry): SearchResult {
+  return {
+    ...app,
+    averageUserRating: 0,
+    userRatingCount: 0,
+    price: 0,
+    formattedPrice: "Gratuit",
+    description: "",
+    version: "",
+    fileSizeBytes: "",
+    minimumOsVersion: "",
+  };
+}
+
+/** Top 100 national : apps du domaine avec CA réel quand iTunes ne suffit pas. */
+async function backfillMonetizingFromNationalTop(
+  query: string,
+  country: CountryCode,
+  excludeIds: ReadonlySet<string>,
+  need: number,
+): Promise<SearchResult[]> {
+  if (need <= 0) return [];
+  const top = await fetchEnrichedTopFree(country, 100);
+  return top
+    .filter((app) => !excludeIds.has(app.id))
+    .map(appEntryToSearchResult)
+    .filter((app) => relevanceScore(query, app) >= 12)
+    .sort((a, b) => relevanceScore(query, b) - relevanceScore(query, a))
+    .slice(0, Math.min(need * 3, 36));
+}
 
 async function runSmartSearchUncached(
   q: string,
@@ -28,7 +69,7 @@ async function runSmartSearchUncached(
 
   const expanded = isGenericDiscoveryQuery(trimmed);
   const queries = expanded ? expandSearchQueries(trimmed) : [trimmed];
-  const perQueryLimit = Math.min(Math.max(Math.ceil(limit / queries.length) + 4, 8), 25);
+  const perQueryLimit = Math.min(Math.max(Math.ceil((limit * 3) / queries.length) + 6, 12), 25);
 
   const buckets = await Promise.all(
     queries.map((term) => searchApps(term, country, perQueryLimit).catch(() => [] as SearchResult[])),
@@ -41,24 +82,41 @@ async function runSmartSearchUncached(
     }
   }
 
-  const merged = [...byId.values()].slice(0, limit * 2);
+  const poolCap = Math.min(limit * 3, 36);
+  const merged = [...byId.values()].slice(0, poolCap);
   const enriched = await enrichSearchResultsWithTrackappMetrics(merged, country);
   const sorted = sortSearchResults(enriched, sort, trimmed, country);
+  const picked = pickMonetizingSearchResults(sorted, limit);
+
+  if (picked.length < limit && expanded) {
+    const exclude = new Set(picked.map((a) => a.id));
+    const backfillRaw = await backfillMonetizingFromNationalTop(
+      trimmed,
+      country,
+      exclude,
+      limit - picked.length,
+    );
+    if (backfillRaw.length > 0) {
+      const backfillEnriched = await enrichSearchResultsWithTrackappMetrics(backfillRaw, country);
+      const backfillSorted = sortSearchResults(backfillEnriched, "revenue", trimmed, country);
+      const extra = pickMonetizingSearchResults(backfillSorted, limit - picked.length);
+      for (const app of extra) {
+        if (picked.length >= limit) break;
+        if (!exclude.has(app.id)) {
+          picked.push(app);
+          exclude.add(app.id);
+        }
+      }
+    }
+  }
 
   return {
-    apps: sorted.slice(0, limit),
+    apps: picked.slice(0, limit),
     queriesUsed: queries,
     sort,
     expanded,
   };
 }
-
-const cachedSmartSearch = unstable_cache(
-  async (q: string, country: CountryCode, limit: number, sort: TrackappSearchSort) =>
-    runSmartSearchUncached(q, country, limit, sort),
-  ["trackapp-smart-search-v4-zero-revenue-floor"],
-  { revalidate: 300 },
-);
 
 export async function runTrackappSmartSearch(
   q: string,
@@ -66,6 +124,7 @@ export async function runTrackappSmartSearch(
 ): Promise<SmartSearchResult> {
   const country = normalizeTrackerCountryParam(options?.country) as CountryCode;
   const limit = Math.min(Math.max(options?.limit ?? 24, 1), 40);
-  const sort = options?.sort ?? (isGenericDiscoveryQuery(q) ? "revenue" : "relevance");
-  return cachedSmartSearch(q.trim(), country, limit, sort);
+  const trimmed = q.trim();
+  const sort = options?.sort ?? (isGenericDiscoveryQuery(trimmed) ? "revenue" : "relevance");
+  return runSmartSearchUncached(trimmed, country, limit, sort);
 }

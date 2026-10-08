@@ -6,11 +6,14 @@ import {
 } from "@/lib/trackapp-app-display-metrics";
 import { finalizeTrackappRevenueEurLabel } from "@/lib/trackapp-revenue-display";
 import { buildReferenceSearchQueries } from "@/lib/trackapp-applab-create/build-reference-query";
-import { shouldUseApplabLocalDevFallback } from "@/lib/trackapp-applab-create/local-dev-fallback";
 import {
+  APPLAB_COMPETITOR_TARGET,
   appMatchesSectorKeywords,
+  appPassesSectorGate,
+  buildCompetitorSearchHints,
   categoryMatchesSector,
   inferCompetitorSector,
+  isOffTopicApp,
   isProjectBrandHomonym,
   revenueSortKey,
   sanitizeCompetitorSearchQueries,
@@ -24,17 +27,19 @@ import type {
 } from "@/lib/trackapp-applab-project/types";
 import { runTrackappSmartSearch } from "@/lib/trackapp-smart-search/run-smart-search";
 
-const RANK_SYSTEM = `Tu es un analyste marché App Store pour Trackapp AppLAB. Tu sélectionne les concurrents du MÊME SECTEUR au sens large — apps proches du concept, pas des homonymes.
+const RANK_SYSTEM = `Tu es un analyste marché App Store pour Trackapp AppLAB. Tu sélectionne les concurrents du MÊME PRODUIT — apps qui font la même chose pour le même utilisateur, pas des homonymes ni des apps du même mot-clé générique.
 
-Règles CRITIQUES:
-- Même secteur / catégorie App Store (ex: Education pour apprentissage langue ; Health & Fitness pour sport).
-- EXCLURE les homonymes du nom du projet si le secteur diffère (ex: projet "kotcha" arabe ≠ app "Kotcha running").
-- EXCLURE les apps hors catégorie (ex: coach running pour un concept éducation arabe).
-- INCLURE les apps généralistes du secteur si pertinentes (Duolingo pour langues, etc.) avec score modéré.
-- relevance_score 0-100: 90+ = concurrent direct, 70-89 = même secteur très proche, 55-69 = même secteur partiel, <55 = exclure.
+Règles CRITIQUES (tous secteurs):
+- Même job utilisateur / même type d'app (ex: tracker fitness ≠ streaming DAZN ; app langue ≠ TikTok ; budget perso ≠ Bloomberg News).
+- Même catégorie App Store ET même usage concret (Education pour langue, Health & Fitness pour tracking, Finance pour budget, Photo & Video pour éditeur…).
+- EXCLURE homonymes du nom du projet si secteur différent (ex: "kotcha" arabe ≠ "Kotcha running").
+- EXCLURE apps hors job : média/news/jeux/réseaux sociaux si le concept est outil métier.
+- INCLURE apps généralistes du secteur si pertinentes (Duolingo pour langues, Strava pour fitness…) avec score modéré.
+- Objectif: identifier exactement ${APPLAB_COMPETITOR_TARGET} concurrents pertinents si le marché le permet.
+- relevance_score 0-100: 90+ = concurrent direct, 70-89 = très proche, 55-69 = partiel, <55 = exclure.
 - Raison courte en français pour chaque app incluse.
-- search_queries: 4-8 requêtes App Store spécifiques au secteur si candidats insuffisants.
-- exclude_app_names: apps à exclure (homonymes, hors secteur).
+- search_queries: 4-8 requêtes App Store spécifiques au job produit — pas un mot générique seul ("sport", "finance", "photo").
+- exclude_app_names: homonymes, hors secteur, apps hors job.
 
 Réponds UNIQUEMENT en JSON conforme au schéma.`;
 
@@ -125,6 +130,8 @@ type ScoredRow = Readonly<{
   relevanceScore: number;
   reason: string;
   include: boolean;
+  hardExclude: boolean;
+  sectorOk: boolean;
 }>;
 
 function buildScoredRows(
@@ -148,44 +155,64 @@ function buildScoredRows(
       input.understanding,
       sector,
     );
-    const sectorOk =
-      categoryMatchesSector(app.category ?? "", sector) && appMatchesSectorKeywords(app, sector);
+    const offTopic = isOffTopicApp(app, sector);
+    const sectorOk = !offTopic && appPassesSectorGate(app, sector);
     const heuristicScore = scoreHeuristic(app, input.understanding, sector);
 
     let relevanceScore = rank?.score ?? heuristicScore;
-    if (excludedByName || homonym) relevanceScore = Math.min(relevanceScore, 20);
+    if (excludedByName || homonym || offTopic) relevanceScore = Math.min(relevanceScore, 20);
     if (!sectorOk) relevanceScore = Math.min(relevanceScore, 45);
     if (rank?.include === false) relevanceScore = Math.min(relevanceScore, 40);
 
     const include =
       !excludedByName &&
       !homonym &&
+      !offTopic &&
       relevanceScore >= 55 &&
       sectorOk &&
       (rank?.include !== false || (!rank && heuristicScore >= 58));
 
     let reason = rank?.reason || "";
     if (homonym) reason = "Homonyme du nom du projet — secteur différent, exclu.";
+    else if (offTopic) reason = "Hors job produit — pas un concurrent direct.";
     else if (!sectorOk) reason = "Hors secteur par rapport au concept.";
     else if (excludedByName) reason = "App trop généraliste ou hors niche pour ce concept.";
     else if (!reason) reason = "Concurrent du même secteur.";
 
-    return { app, relevanceScore, reason, include };
+    const hardExclude = excludedByName || homonym || offTopic;
+
+    return { app, relevanceScore, reason, include, hardExclude, sectorOk };
   });
 }
 
-function pickTopCompetitors(rows: ScoredRow[]): ScoredRow[] {
-  const included = rows.filter((row) => row.include);
-  const pool = included.length > 0 ? included : rows.filter((row) => row.relevanceScore >= 48);
+function sortCompetitorRows(a: ScoredRow, b: ScoredRow): number {
+  if (b.relevanceScore !== a.relevanceScore) return b.relevanceScore - a.relevanceScore;
+  const revA = revenueSortKey(a.app.trackappMetrics.sortRevenueUsd, a.app.trackappMetrics.revenueDisplay);
+  const revB = revenueSortKey(b.app.trackappMetrics.sortRevenueUsd, b.app.trackappMetrics.revenueDisplay);
+  return revB - revA;
+}
 
-  return [...pool]
-    .sort((a, b) => {
-      const revA = revenueSortKey(a.app.trackappMetrics.sortRevenueUsd, a.app.trackappMetrics.revenueDisplay);
-      const revB = revenueSortKey(b.app.trackappMetrics.sortRevenueUsd, b.app.trackappMetrics.revenueDisplay);
-      if (revB !== revA) return revB - revA;
-      return b.relevanceScore - a.relevanceScore;
-    })
-    .slice(0, 8);
+function pickTopCompetitors(rows: ScoredRow[]): ScoredRow[] {
+  const included = [...rows.filter((row) => row.include)].sort(sortCompetitorRows);
+  const usedIds = new Set(included.map((row) => row.app.id));
+  const pool = [...included];
+
+  if (pool.length < APPLAB_COMPETITOR_TARGET) {
+    const soft = rows
+      .filter((row) => !usedIds.has(row.app.id))
+      .filter((row) => !row.hardExclude)
+      .filter((row) => row.sectorOk || row.relevanceScore >= 58)
+      .filter((row) => row.relevanceScore >= 48)
+      .sort(sortCompetitorRows);
+
+    for (const row of soft) {
+      if (pool.length >= APPLAB_COMPETITOR_TARGET) break;
+      pool.push(row);
+      usedIds.add(row.app.id);
+    }
+  }
+
+  return pool.slice(0, APPLAB_COMPETITOR_TARGET);
 }
 
 export async function findPreciseApplabCompetitors(input: {
@@ -204,9 +231,14 @@ export async function findPreciseApplabCompetitors(input: {
   }>
 > {
   const sector = inferCompetitorSector(input.concept, input.understanding);
+  const hints = buildCompetitorSearchHints(input.concept, input.understanding.niche);
   const heuristicQueries = buildReferenceSearchQueries(input.concept);
   const queries = sanitizeCompetitorSearchQueries(
-    [...input.understanding.search_queries, ...heuristicQueries],
+    [
+      ...(sector.searchQueries ?? hints.searchQueries),
+      ...input.understanding.search_queries,
+      ...heuristicQueries,
+    ],
     input.name,
     input.concept,
   ).slice(0, 8);
@@ -235,17 +267,18 @@ export async function findPreciseApplabCompetitors(input: {
     for (const app of enriched) byId.set(app.id, app);
   }
 
-  const candidates = [...byId.values()].slice(0, 40);
+  const candidates = [...byId.values()].slice(0, 60);
   if (candidates.length === 0) {
     return { apps: [], queriesUsed: queries };
   }
 
   const rankMap = new Map<string, { score: number; include: boolean; reason: string }>();
   let extraQueries: string[] = [];
+  let aiExcludeNames: string[] = [];
   let failure: string | undefined;
   let failureDetail: string | undefined;
 
-  const skipAiRank = shouldUseApplabLocalDevFallback();
+  const skipAiRank = !process.env.OPENAI_API_KEY?.trim();
 
   if (!skipAiRank) {
     const candidatePayload = candidates.map((app) => ({
@@ -291,6 +324,7 @@ export async function findPreciseApplabCompetitors(input: {
     failure = rankResult.failure;
     failureDetail = rankResult.failureDetail;
     extraQueries = rankResult.data?.search_queries ?? [];
+    aiExcludeNames = rankResult.data?.exclude_app_names ?? [];
 
     for (const row of rankResult.data?.ranked ?? []) {
       if (!row?.id) continue;
@@ -316,7 +350,8 @@ export async function findPreciseApplabCompetitors(input: {
 
   const excludeNames = [
     ...input.understanding.not_competitors,
-    ...(skipAiRank ? [] : []),
+    ...(sector.notCompetitors ?? hints.notCompetitors),
+    ...aiExcludeNames,
   ];
 
   const allApps = [...byId.values()];

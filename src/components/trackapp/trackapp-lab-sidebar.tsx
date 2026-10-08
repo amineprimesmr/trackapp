@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  IconNavBook,
   IconNavSparkle,
   IconPanelClose,
   IconPanelOpen,
@@ -21,10 +20,7 @@ import {
   writeApplabCreateDraft,
 } from "@/lib/trackapp-applab-create/storage";
 import { trackappGuestNavHref, TRACKAPP_LANDING_PATH } from "@/lib/trackapp-landing-paths";
-import {
-  TRACKAPP_APPTRACKER_PATH,
-  TRACKAPP_RESSOURCES_PATH,
-} from "@/lib/trackapp-tools-paths";
+import { TRACKAPP_APPTRACKER_PATH } from "@/lib/trackapp-tools-paths";
 import { cn } from "@/lib/utils";
 
 type ProjectEntry = Readonly<{
@@ -217,7 +213,7 @@ export function TrackappLabSidebar({
       <aside
         id="app-sidebar"
         className={cn(
-          "app-sidebar trackapp-lab-sidebar trackapp-studio-sidebar hidden md:flex flex-col fixed left-0 z-[90]",
+          "app-sidebar trackapp-lab-sidebar trackapp-studio-sidebar hidden md:flex flex-col fixed inset-y-0 left-0 z-[90]",
           mobileMenuOpen && "is-mobile-open",
           collapsed && "trackapp-lab-sidebar--collapsed trackapp-studio-sidebar--collapsed",
         )}
@@ -281,18 +277,6 @@ export function TrackappLabSidebar({
                 icon={IconSearch}
                 collapsed={collapsed}
                 active={pathname === TRACKAPP_APPTRACKER_PATH}
-                onNavigate={onNavigate}
-                loggedIn={loggedIn}
-              />
-              <ToolLink
-                href={TRACKAPP_RESSOURCES_PATH}
-                label="Ressources"
-                icon={IconNavBook}
-                tone="neutral"
-                collapsed={collapsed}
-                active={
-                  pathname === TRACKAPP_RESSOURCES_PATH || pathname.startsWith(`${TRACKAPP_RESSOURCES_PATH}/`)
-                }
                 onNavigate={onNavigate}
                 loggedIn={loggedIn}
               />

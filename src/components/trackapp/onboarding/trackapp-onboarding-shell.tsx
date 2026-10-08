@@ -40,6 +40,16 @@ export function TrackappOnboardingShell({
   const ratio = totalSteps > 1 ? stepIndex / (totalSteps - 1) : 1;
   const activeGroup = Math.min(PROGRESS_GROUPS - 1, Math.floor(ratio * PROGRESS_GROUPS));
   const stepLabel = `${stepIndex + 1} / ${totalSteps}`;
+  const showBack = canGoBack;
+  const showClose = overlay && !canGoBack && Boolean(onDismiss);
+
+  const handleNavClick = () => {
+    if (showBack) {
+      onBack();
+      return;
+    }
+    onDismiss?.();
+  };
 
   return (
     <div className={overlay ? "ta-onboarding ta-onboarding--overlay ta-font" : "ta-onboarding ta-font"}>
@@ -80,11 +90,11 @@ export function TrackappOnboardingShell({
               <button
                 type="button"
                 className="ta-onboarding__back"
-                aria-label={canGoBack ? "Étape précédente" : overlay ? "Fermer" : "Étape précédente"}
-                disabled={!canGoBack && !onDismiss}
-                onClick={canGoBack ? onBack : onDismiss}
+                aria-label={showBack ? "Étape précédente" : showClose ? "Fermer l'onboarding" : "Retour"}
+                disabled={!showBack && !showClose}
+                onClick={handleNavClick}
               >
-                {canGoBack ? "←" : overlay ? "✕" : "←"}
+                {showBack ? "←" : showClose ? "✕" : "←"}
               </button>
               <p className="ta-onboarding__section">{headline ?? promoTitle ?? section}</p>
               <span className="ta-onboarding__step-pill" aria-hidden>

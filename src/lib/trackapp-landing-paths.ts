@@ -2,25 +2,29 @@ import {
   TRACKAPP_APP_STUDIO_PATH,
   isTrackappCreerUneAppPath,
 } from "@/lib/trackapp-applab-create/paths";
-import { trackappOnboardingOverlayHref } from "@/lib/trackapp-onboarding-overlay";
 import {
   TRACKAPP_APPTRACKER_PATH,
-  TRACKAPP_RESSOURCES_PATH,
   isTrackappApptrackerPath,
-  isTrackappRessourcesPath,
 } from "@/lib/trackapp-tools-paths";
+
+/** Page offre publique (rewrite `/offers` → cette route). */
+export const TRACKAPP_OFFERS_PATH = "/offers";
 
 /** Entrée produit trackapp.fr — parcours « Créez votre prochaine app » (`/trackapp`). */
 export const TRACKAPP_LANDING_PATH = TRACKAPP_APP_STUDIO_PATH;
 
-/** Ancienne route — redirige vers l’overlay sur la landing. */
-export const TRACKAPP_COMMENCER_PATH = "/trackapp/onboarding";
+/** Entrée paiement Whop — parcours LP → Whop → merci → bienvenue. */
+export const TRACKAPP_COMMENCER_PATH = TRACKAPP_OFFERS_PATH;
 
 const GUEST_OPEN_PATHS = new Set([
   TRACKAPP_LANDING_PATH,
+  TRACKAPP_OFFERS_PATH,
+  "/trackapp/offers",
   "/trackapp/connexion",
   "/trackapp/onboarding",
   "/trackapp/paiement",
+  "/trackapp/merci",
+  "/trackapp/bienvenue",
   "/trackapp/inscription",
   "/trackapp/activation",
   "/trackapp/mot-de-passe-oublie",
@@ -28,7 +32,6 @@ const GUEST_OPEN_PATHS = new Set([
 
 const GUEST_TOOL_PREFIXES = [
   TRACKAPP_APPTRACKER_PATH,
-  TRACKAPP_RESSOURCES_PATH,
   "/trackapp/marketing",
   "/trackapp/notre-selection",
   "/trackapp/logiciels",
@@ -46,9 +49,8 @@ export function trackappConnexionNextHref(nextPath: string = TRACKAPP_LANDING_PA
   return `/trackapp/connexion?next=${encodeURIComponent(path)}`;
 }
 
-export function trackappCommencerHref(nextPath: string = TRACKAPP_LANDING_PATH): string {
-  const path = nextPath.startsWith("/") ? nextPath : `/${nextPath}`;
-  return trackappOnboardingOverlayHref(TRACKAPP_LANDING_PATH, path);
+export function trackappCommencerHref(_nextPath: string = TRACKAPP_LANDING_PATH): string {
+  return TRACKAPP_OFFERS_PATH;
 }
 
 function pathOnly(href: string): string {
@@ -81,7 +83,6 @@ export function isTrackappGuestToolNavTarget(pathname: string): boolean {
   const path = pathOnly(pathname);
   return (
     isTrackappApptrackerPath(path)
-    || isTrackappRessourcesPath(path)
     || isProtectedToolPath(path)
   );
 }

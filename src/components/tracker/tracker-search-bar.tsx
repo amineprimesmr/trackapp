@@ -20,7 +20,12 @@ import "@/styles/tracker-search-bar.css";
 
 import { abortInFlightRequest, isAbortError } from "@/lib/abort-signal";
 import { COUNTRY_MAP, TRACKER_DEFAULT_COUNTRY, type CountryCode } from "@/lib/apple-charts";
+import {
+  TRACKAPP_METRICS_UNAVAILABLE_LABEL,
+  type SearchResultWithTrackappMetrics,
+} from "@/lib/trackapp-app-display-metrics";
 import { trackappAccueilAppHref, trackappAccueilHref, trackappApercuAppHref } from "@/lib/trackapp-apptracker-paths";
+import { finalizeTrackappRevenueEurLabel } from "@/lib/trackapp-revenue-display";
 import {
   TRACKAPP_SEARCH_SORT_OPTIONS,
   type TrackappSearchSort,
@@ -54,7 +59,7 @@ type SearchHit = {
   releaseLine: string;
   rating: number;
   langLabel: string;
-  /** Revenus ST (EUR) — API Trackapp live-search uniquement. */
+  /** Revenus ST (EUR) — recherche Trackapp smart-search. */
   revenueDisplay?: string;
   metricSource?: string;
   sortRevenueUsd?: number;
@@ -96,6 +101,37 @@ function applySearchMetricsToHits(
     merged.sort((a, b) => (b.sortDownloads ?? 0) - (a.sortDownloads ?? 0));
   }
   return merged;
+}
+
+function langChip(codes: string[] | undefined): string {
+  if (!codes?.length) return "";
+  const first = codes[0]?.toUpperCase() ?? "";
+  const extra = codes.length - 1;
+  return extra > 0 ? `${first} +${String(extra)}` : first;
+}
+
+function smartSearchAppToHit(app: SearchResultWithTrackappMetrics): SearchHit {
+  const rev = app.trackappMetrics.revenueDisplay;
+  const revenueDisplay =
+    rev === TRACKAPP_METRICS_UNAVAILABLE_LABEL ? "—" : finalizeTrackappRevenueEurLabel(rev || "—");
+  return {
+    id: app.id,
+    name: app.name,
+    artistName: app.artistName,
+    category: app.category,
+    categoryId: app.categoryId,
+    artworkUrl: app.artworkUrl,
+    rank: app.rank,
+    releaseDate: app.releaseDate,
+    dlEst: app.trackappMetrics.downloadsDisplay ?? "—",
+    releaseLine: formatReleaseMeta(app.releaseDate),
+    rating: app.averageUserRating,
+    langLabel: langChip(app.languageCodesISO2A),
+    revenueDisplay,
+    metricSource: app.trackappMetrics.metricSource,
+    sortRevenueUsd: app.trackappMetrics.sortRevenueUsd,
+    sortDownloads: app.trackappMetrics.sortDownloads,
+  };
 }
 
 function formatReleaseMeta(raw: string) {
@@ -236,7 +272,7 @@ export function TrackerSearchBar({
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  const [sort, setSort] = useState<TrackappSearchSort>("relevance");
+  const [sort, setSort] = useState<TrackappSearchSort>("revenue");
 
   /** Tri visible uniquement sur l’Accueil workspace — pas sur la landing. */
   const showSearchSort = trackappLiveMetrics && embedded;
@@ -331,43 +367,55 @@ export function TrackerSearchBar({
     setSearchLoading(true);
     void (async () => {
       try {
-        const quickPath = `/api/trackapp/live-search?q=${encodeURIComponent(debouncedQ)}&country=${storeCountry}&limit=12&sort=${searchSort}&quick=1`;
-        const quickRes = await fetch(quickPath, { signal: ac.signal, cache: "no-store" });
-        const quickData = (await quickRes.json()) as { apps?: SearchHit[] };
-        const quickHits = Array.isArray(quickData.apps) ? quickData.apps : [];
-        if (ac.signal.aborted) return;
-        setSearchHits(quickHits);
-        setSearchLoading(false);
-
-        const ids = quickHits.map((a) => a.id).filter(Boolean);
-        if (ids.length === 0) return;
-
-        try {
-          const metricsRes = await fetch("/api/trackapp/search-metrics", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ appIds: ids, country: storeCountry }),
-            signal: ac.signal,
-            cache: "no-store",
-          });
-          const metricsData = (await metricsRes.json()) as {
-            metrics?: Record<
-              string,
-              {
-                revenueDisplay: string;
-                metricSource: string;
-                sortRevenueUsd: number;
-                sortDownloads: number;
-              }
-            >;
-          };
-          if (ac.signal.aborted) return;
-          setSearchHits((prev) =>
-            applySearchMetricsToHits(prev, metricsData.metrics ?? {}, searchSort),
+        if (trackappLiveMetrics) {
+          const res = await fetch(
+            `/api/trackapp/search?q=${encodeURIComponent(debouncedQ)}&country=${storeCountry}&limit=12&sort=${searchSort}`,
+            { signal: ac.signal, cache: "no-store" },
           );
-        } catch (metricsErr) {
-          if (isAbortError(metricsErr) || ac.signal.aborted) return;
-          setSearchHits((prev) => applySearchMetricsToHits(prev, {}, searchSort));
+          const data = (await res.json()) as { apps?: SearchResultWithTrackappMetrics[] };
+          if (ac.signal.aborted) return;
+          const hits = (Array.isArray(data.apps) ? data.apps : []).map(smartSearchAppToHit);
+          setSearchHits(hits);
+        } else {
+          const quickPath = `/api/trackapp/live-search?q=${encodeURIComponent(debouncedQ)}&country=${storeCountry}&limit=12&sort=${searchSort}&quick=1`;
+          const quickRes = await fetch(quickPath, { signal: ac.signal, cache: "no-store" });
+          const quickData = (await quickRes.json()) as { apps?: SearchHit[] };
+          const quickHits = Array.isArray(quickData.apps) ? quickData.apps : [];
+          if (ac.signal.aborted) return;
+          setSearchHits(quickHits);
+          setSearchLoading(false);
+
+          const ids = quickHits.map((a) => a.id).filter(Boolean);
+          if (ids.length === 0) return;
+
+          try {
+            const metricsRes = await fetch("/api/trackapp/search-metrics", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ appIds: ids, country: storeCountry }),
+              signal: ac.signal,
+              cache: "no-store",
+            });
+            const metricsData = (await metricsRes.json()) as {
+              metrics?: Record<
+                string,
+                {
+                  revenueDisplay: string;
+                  metricSource: string;
+                  sortRevenueUsd: number;
+                  sortDownloads: number;
+                }
+              >;
+            };
+            if (ac.signal.aborted) return;
+            setSearchHits((prev) =>
+              applySearchMetricsToHits(prev, metricsData.metrics ?? {}, searchSort),
+            );
+          } catch (metricsErr) {
+            if (isAbortError(metricsErr) || ac.signal.aborted) return;
+            setSearchHits((prev) => applySearchMetricsToHits(prev, {}, searchSort));
+          }
+          return;
         }
       } catch (e) {
         if (isAbortError(e) || ac.signal.aborted) return;
@@ -377,7 +425,7 @@ export function TrackerSearchBar({
       }
     })().catch(() => undefined);
     return () => abortInFlightRequest(ac);
-  }, [debouncedQ, storeCountry, searchSort]);
+  }, [debouncedQ, storeCountry, searchSort, trackappLiveMetrics]);
 
   useEffect(() => {
     setHighlight(0);

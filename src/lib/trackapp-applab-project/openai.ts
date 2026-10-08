@@ -139,6 +139,29 @@ export function parseClarifyingQuestions(raw: unknown): import("./types").Applab
   return out.slice(0, 4);
 }
 
+function parseClientPersonas(raw: unknown): import("./types").ApplabClientPersona[] {
+  if (!Array.isArray(raw)) return [];
+  const out: import("./types").ApplabClientPersona[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const p = item as Record<string, unknown>;
+    const name = asString(p.name);
+    const label = asString(p.label);
+    const profile = asString(p.profile);
+    if (!name || !label || !profile) continue;
+    out.push({
+      name,
+      label,
+      age_range: asString(p.age_range, "25–40 ans"),
+      profile,
+      goals: asString(p.goals, "Objectifs liés au concept"),
+      frustrations: asString(p.frustrations, "Frustrations liées au problème adressé"),
+      why_this_app: asString(p.why_this_app, "Cette app répond à son besoin principal"),
+    });
+  }
+  return out.slice(0, 3);
+}
+
 export function parseAssessment(raw: unknown): import("./types").ApplabConceptAssessment | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -146,15 +169,47 @@ export function parseAssessment(raw: unknown): import("./types").ApplabConceptAs
   const summary = asString(o.summary);
   if (!headline || !summary) return null;
 
+  const client_personas = parseClientPersonas(o.client_personas);
+  const market_insight = asString(o.market_insight, summary);
+  const value_proposition = asString(o.value_proposition, headline);
+  const differentiation = asString(o.differentiation);
+  const positioning = asString(o.positioning, differentiation);
+
   return {
     headline,
     summary,
     how_it_works: asString(o.how_it_works, summary),
     target_user: asString(o.target_user),
     monetization: asString(o.monetization),
-    differentiation: asString(o.differentiation),
+    differentiation,
     mvp_features: asStringArray(o.mvp_features, 8),
     risks: asStringArray(o.risks, 4),
     build_prompt_seed: asString(o.build_prompt_seed, summary),
+    market_insight,
+    value_proposition,
+    positioning,
+    client_personas:
+      client_personas.length >= 2
+        ? client_personas
+        : [
+            {
+              name: "Persona principal",
+              label: "Cible prioritaire",
+              age_range: "25–40 ans",
+              profile: asString(o.target_user, summary),
+              goals: "Atteindre le résultat promis par l'app",
+              frustrations: "Solutions actuelles trop généralistes ou fragmentées",
+              why_this_app: value_proposition,
+            },
+            {
+              name: "Persona secondaire",
+              label: "Cible opportuniste",
+              age_range: "18–30 ans",
+              profile: "Utilisateur mobile exigeant, habitué aux apps premium du secteur",
+              goals: "Gagner du temps avec une expérience fluide et guidée",
+              frustrations: "Abandonne vite si la valeur n'est pas claire dès le premier jour",
+              why_this_app: positioning || differentiation,
+            },
+          ],
   };
 }

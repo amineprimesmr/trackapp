@@ -37,7 +37,6 @@ export function TrackappApplabClarifyWizard({
   const progress = useMemo(() => getClarifyFlowProgress(ctx), [ctx]);
 
   const [draft, setDraft] = useState("");
-  const [helpOpen, setHelpOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
 
   const finish = useCallback(() => {
@@ -65,7 +64,6 @@ export function TrackappApplabClarifyWizard({
     }
     const saved = answers[current.id];
     setDraft(saved && saved !== "__skipped__" ? saved : "");
-    setHelpOpen(false);
   }, [current, answers]);
 
   const canContinue = current ? canSubmitClarifyAnswer(current, draft) : false;
@@ -96,11 +94,8 @@ export function TrackappApplabClarifyWizard({
 
   return (
     <div className="ta-clarify-wizard ta-clarify-wizard--open">
-      <div className="ta-clarify-wizard__progress" aria-live="polite">
-        <span className="ta-clarify-wizard__progress-label">
-          Question {progress.done + 1} / {progress.total}
-        </span>
-        <div className="ta-clarify-wizard__progress-track" aria-hidden>
+      <div className="ta-clarify-wizard__progress" aria-hidden>
+        <div className="ta-clarify-wizard__progress-track">
           <span
             className="ta-clarify-wizard__progress-fill"
             style={{ width: `${((progress.done + 1) / progress.total) * 100}%` }}
@@ -109,38 +104,7 @@ export function TrackappApplabClarifyWizard({
       </div>
 
       <div className="ta-clarify-wizard__card">
-        <div className="ta-clarify-wizard__head">
-          <h2 className="ta-clarify-wizard__question">{current.question}</h2>
-          <button
-            type="button"
-            className={cn("ta-clarify-wizard__help-btn", helpOpen && "is-active")}
-            onClick={() => setHelpOpen((v) => !v)}
-            aria-expanded={helpOpen}
-          >
-            Aide
-          </button>
-        </div>
-
-        {helpOpen ? (
-          <div className="ta-clarify-wizard__help-block">
-            <p className="ta-clarify-wizard__help">{current.help}</p>
-            {current.examples.length > 0 ? (
-              <ul className="ta-clarify-wizard__examples">
-                {current.examples.map((ex) => (
-                  <li key={ex}>
-                    <button
-                      type="button"
-                      className="ta-clarify-wizard__example-btn"
-                      onClick={() => setDraft(ex)}
-                    >
-                      {ex}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
+        <h2 className="ta-clarify-wizard__question">{current.question}</h2>
 
         <textarea
           id={`clarify-flow-${current.id}`}

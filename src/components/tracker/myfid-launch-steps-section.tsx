@@ -2,7 +2,7 @@ import { TrackerLaunchFaq } from "@/components/tracker/tracker-launch-faq";
 
 import "@/styles/myfid-launch-steps.css";
 
-const DEFAULT_CTA_HREF = "/trackapp/onboarding";
+const DEFAULT_CTA_HREF = "/offers";
 
 /** Section « Lancez-vous rapidement » — FAQ + CTA workspace. */
 export function MyfidLaunchStepsSection({

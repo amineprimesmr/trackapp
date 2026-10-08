@@ -1,13 +1,19 @@
-.hero-app-icon-layer {
-  transition:
-    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
+.hero-app-icon-stage {
+  overflow: hidden;
+  vertical-align: middle;
 }
 
-.hero-app-icon-layer--in-from {
+.hero-app-icon-layer {
+  transition:
+    opacity 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+}
+
+.hero-app-icon-layer--in-from:not(.hero-app-icon-layer--in) {
   opacity: 0;
-  transform: scale(0.9);
+  transform: scale(0.94);
 }
 
 .hero-app-icon-layer--in {
@@ -17,7 +23,19 @@
 
 .hero-app-icon-layer--out {
   opacity: 0;
-  transform: scale(0.92);
+  transform: scale(0.96);
+}
+
+.hero-app-icon-layer--3d.hero-app-icon-layer--in-from:not(.hero-app-icon-layer--in) {
+  transform: scale(0.94) rotateY(-24deg);
+}
+
+.hero-app-icon-layer--3d.hero-app-icon-layer--in {
+  transform: scale(1) rotateY(0deg);
+}
+
+.hero-app-icon-layer--3d.hero-app-icon-layer--out {
+  transform: scale(0.96) rotateY(24deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -26,7 +44,7 @@
     will-change: auto;
   }
 
-  .hero-app-icon-layer--in-from,
+  .hero-app-icon-layer--in-from:not(.hero-app-icon-layer--in),
   .hero-app-icon-layer--out {
     opacity: 1;
     transform: none;

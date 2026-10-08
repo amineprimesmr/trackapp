@@ -85,16 +85,23 @@
 }
 
 .ta-onboarding__back {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: -0.25rem;
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--ob-text);
   font-size: 1.25rem;
   cursor: pointer;
   border-radius: 999px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .ta-onboarding__back:disabled {
@@ -102,8 +109,14 @@
   cursor: default;
 }
 
+.ta-onboarding__back:not(:disabled):active {
+  background: rgb(255 255 255 / 0.08);
+}
+
 .ta-onboarding__section {
   flex: 1;
+  min-width: 0;
+  pointer-events: none;
   text-align: center;
   font-size: 0.72rem;
   font-weight: 600;
@@ -1273,6 +1286,34 @@
 #app-app[data-route-kind="lite-fullscreen"] {
   min-height: 100dvh;
   background: #0e1113;
+}
+
+/* Landing invité — pas de sidebar workspace */
+
+#app-app[data-route-kind="landing-guest"] .app-sidebar,
+#app-app[data-route-kind="landing-guest"] .trackapp-lab-sidebar,
+#app-app[data-route-kind="landing-guest"] .app-sidebar-overlay,
+#app-app[data-route-kind="landing-guest"] .trackapp-mobile-menu-btn {
+  display: none !important;
+}
+
+#app-app[data-route-kind="landing-guest"] .app-main {
+  margin: 0 !important;
+  margin-right: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0.65rem 0 0 !important;
+  min-height: 100dvh !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+#app-app[data-route-kind="landing-guest"] .app-content {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
 }
 
 .ta-onboarding__step-motion {

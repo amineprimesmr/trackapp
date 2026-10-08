@@ -16,7 +16,12 @@ import {
 } from "@/components/trackapp/auth/trackapp-auth-shared";
 import { createClient } from "@/lib/supabase/client";
 import { syncOnboardingDraftToProfile } from "@/lib/trackapp-onboarding/local-draft";
-import { trackappPlanDisplayLabel, type TrackappBillingPlan } from "@/lib/trackapp/pricing";
+import { TRACKAPP_ACCUEIL_BASE } from "@/lib/trackapp-apptracker-paths";
+import {
+  fetchOnboardingNeedsCompletion,
+  TRACKAPP_BIENVENUE_PATH,
+} from "@/lib/trackapp/post-payment-flow";
+import type { TrackappBillingPlan } from "@/lib/trackapp/pricing";
 
 type CheckoutInfo = {
   paid: boolean;
@@ -26,11 +31,7 @@ type CheckoutInfo = {
   already_linked: boolean;
 };
 
-type Step = "loading" | "celebrate" | "account" | "linking" | "done" | "error";
-
-function planLabel(plan: TrackappBillingPlan): string {
-  return trackappPlanDisplayLabel(plan);
-}
+type Step = "loading" | "account" | "linking" | "done" | "error";
 
 function ActivationExperienceInner() {
   const sb = createClient();
@@ -68,11 +69,12 @@ function ActivationExperienceInner() {
     return `${origin}/trackapp/auth/callback?next=${nextEnc}`;
   }, [firstName, sessionId]);
 
-  const finishToAccueil = useCallback(async () => {
+  const finishPostPayment = useCallback(async () => {
     setStep("done");
     await syncOnboardingDraftToProfile();
     router.refresh();
-    router.push("/trackapp/apptracker");
+    const needsOnboarding = await fetchOnboardingNeedsCompletion();
+    router.push(needsOnboarding ? TRACKAPP_BIENVENUE_PATH : TRACKAPP_ACCUEIL_BASE);
   }, [router]);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ function ActivationExperienceInner() {
       return;
     }
 
-    let celebrateTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
 
     (async () => {
       try {
@@ -90,6 +92,7 @@ function ActivationExperienceInner() {
         const data = (await res.json()) as CheckoutInfo & { error?: string };
         if (!res.ok) throw new Error(data.error || "Session introuvable.");
         if (!data.paid) throw new Error("Paiement non confirmé. Attends quelques secondes puis recharge.");
+        if (cancelled) return;
         setCheckout(data);
         if (data.email) setEmail(data.email);
         if (returnedFirstName) setFirstName(returnedFirstName);
@@ -107,7 +110,7 @@ function ActivationExperienceInner() {
           });
           const linkData = (await linkRes.json().catch(() => ({}))) as { error?: string };
           if (!linkRes.ok) throw new Error(linkData.error || "Impossible de lier votre paiement.");
-          finishToAccueil();
+          finishPostPayment();
           return;
         }
 
@@ -121,7 +124,7 @@ function ActivationExperienceInner() {
           });
           const linkData = (await linkRes.json().catch(() => ({}))) as { error?: string };
           if (linkRes.ok) {
-            finishToAccueil();
+            finishPostPayment();
             return;
           }
           setError(linkData.error ?? "Connectez-vous avec l'e-mail utilisé lors du paiement.");
@@ -129,18 +132,18 @@ function ActivationExperienceInner() {
           return;
         }
 
-        setStep("celebrate");
-        celebrateTimer = setTimeout(() => setStep("account"), reduce ? 400 : 1600);
+        setStep("account");
       } catch (err) {
+        if (cancelled) return;
         setStep("error");
         setError(err instanceof Error ? err.message : "Impossible de vérifier le paiement.");
       }
     })();
 
     return () => {
-      if (celebrateTimer) clearTimeout(celebrateTimer);
+      cancelled = true;
     };
-  }, [sessionId, oauthReturn, returnedFirstName, sb, reduce, finishToAccueil]);
+  }, [sessionId, oauthReturn, returnedFirstName, sb, finishPostPayment]);
 
   const oauthGoogle = useCallback(async () => {
     if (!sb || firstName.trim().length < 2) {
@@ -187,7 +190,7 @@ function ActivationExperienceInner() {
       const { error: signErr } = await sb.auth.signInWithPassword({ email: signInEmail, password });
       if (signErr) throw new Error(signErr.message ?? "Compte créé mais connexion échouée.");
 
-      finishToAccueil();
+      finishPostPayment();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Échec de l'inscription.");
     } finally {
@@ -231,30 +234,6 @@ function ActivationExperienceInner() {
                 <div className="ta-activation-spinner" aria-hidden />
                 <p className="ta-activation-stage__label">
                   {step === "linking" ? "Finalisation de votre compte…" : "Vérification du paiement…"}
-                </p>
-              </motion.div>
-            : step === "celebrate" ?
-              <motion.div
-                key="celebrate"
-                className="ta-activation-stage"
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={reduce ? { duration: 0.15 } : { type: "spring", damping: 22, stiffness: 280 }}
-              >
-                <motion.div
-                  className="ta-activation-check"
-                  initial={reduce ? false : { scale: 0.4, rotate: -12 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={reduce ? { duration: 0.12 } : { type: "spring", damping: 14, stiffness: 320 }}
-                >
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
-                    <path strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </motion.div>
-                <h1 className="ta-auth-headline">Paiement confirmé</h1>
-                <p className="ta-auth-lead">
-                  {checkout ? planLabel(checkout.plan) : "Trackapp"} activé — il ne reste qu&apos;à créer votre compte.
                 </p>
               </motion.div>
             : step === "error" ?

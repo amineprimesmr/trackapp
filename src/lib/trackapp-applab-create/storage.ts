@@ -9,8 +9,6 @@ const STEP_ORDER: ApplabCreateStepId[] = [
   "name",
   "concept",
   "audience",
-  "problem",
-  "v1_features",
   "pricing",
   "synthesis",
 ];
@@ -19,13 +17,12 @@ function normalizeStep(step: unknown): ApplabCreateStepId {
   if (step === "welcome") return "name";
   if (step === "ready" || step === "prompt") return "synthesis";
   if (step === "clarify") return "audience";
+  if (step === "problem" || step === "v1_features") return "pricing";
   if (step === "assessment" || step === "reference" || step === "constraints") return "synthesis";
   if (
     step === "name" ||
     step === "concept" ||
     step === "audience" ||
-    step === "problem" ||
-    step === "v1_features" ||
     step === "pricing" ||
     step === "synthesis"
   ) {
@@ -96,6 +93,7 @@ export function defaultApplabCreateDraft(partial?: Partial<ApplabCreateDraft>): 
     stack: "swiftui",
     promptVersions: [],
     activePromptVersionId: null,
+    synthesisCompetitors: [],
     syncedAt: null,
     updatedAt: new Date().toISOString(),
     ...rest,
@@ -117,6 +115,9 @@ export function readApplabCreateDraft(): ApplabCreateDraft | null {
           clarifyingAnswers: migrateCreateAnswers(parsed.clarifyingAnswers ?? {}),
           constraints: parsed.constraints ?? DEFAULT_APPLAB_CONSTRAINTS,
           promptVersions: parsed.promptVersions ?? [],
+          synthesisCompetitors: Array.isArray(parsed.synthesisCompetitors) ?
+            parsed.synthesisCompetitors
+          : [],
         };
       }
     }
@@ -180,6 +181,11 @@ export function prevStepId(stepId: ApplabCreateStepId): ApplabCreateStepId | nul
 
 export function hasPassedNameStep(currentStep: ApplabCreateStepId): boolean {
   return stepIndex(currentStep) > stepIndex("name");
+}
+
+/** Bilan déjà généré (synthèse + understanding) — ne pas relancer l’animation au refresh. */
+export function isApplabSynthesisCached(draft: ApplabCreateDraft): boolean {
+  return Boolean(draft.understanding && draft.assessment);
 }
 
 export function getActivePromptVersion(draft: ApplabCreateDraft) {

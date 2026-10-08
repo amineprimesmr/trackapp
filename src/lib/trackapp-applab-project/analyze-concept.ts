@@ -14,6 +14,7 @@ import {
   formatClarifyFlowAnswersBlock,
   type ClarifyFlowAnswers,
 } from "@/lib/trackapp-applab-create/clarify-flow";
+import { normalizeFounderAnswerText } from "@/lib/trackapp-applab-create/normalize-founder-text";
 import type {
   ApplabConceptAnswers,
   ApplabConceptAssessment,
@@ -75,16 +76,43 @@ Exemple CORRECT: "Francophones 18-45 ans, débutants complets en arabe écrit. S
 
 Réponds UNIQUEMENT en JSON conforme au schéma (champ suggestion).`;
 
-const ASSESS_SYSTEM = `Tu es l'architecte produit AppLAB de Trackapp. Tu rédiges une synthèse claire et actionnable pour une **app iOS v1.0 prête App Store** — pas un MVP jetable.
+const ASSESS_SYSTEM = `Tu es un consultant senior étude de marché + architecte produit AppLAB (Trackapp). Tu reçois le nom du projet, le concept brut et TOUTES les réponses du fondateur (cible, tarifs, etc.).
+
+Ta mission: produire une **étude de marché produit complète, intelligente et actionnable** — comme un cabinet conseil livrerait avant un lancement App Store. Tu ne recopies pas les réponses: tu les **analyses, développes, complètes, structurez et améliores**.
+
+MÉTHODE OBLIGATOIRE:
+1. Lire chaque réponse du fondateur — même courtes ou brouillonnes — et en extraire l'intention réelle.
+2. Combler les trous par déduction logique à partir du concept + cible + tarifs (jamais de placeholder « à définir » sans contenu).
+3. Croiser concept × cible × monétisation pour une vision produit cohérente.
+4. Rédiger comme une vraie étude: précis, carré, crédible, sans généralités (« tout le monde », « les utilisateurs »).
+
+CHAMPS CLÉS:
+- headline: promesse produit percutante (1 ligne, pas le nom seul).
+- summary: executive summary marché (3-5 phrases denses: opportunité, job utilisateur, angle).
+- market_insight: analyse marché (taille/segment, tendances, concurrence implicite, fenêtre d'opportunité, 4-6 phrases).
+- value_proposition: bénéfice principal unique en 1-2 phrases (résultat concret pour l'utilisateur).
+- positioning: comment se positionner vs alternatives (2-3 phrases, niche claire).
+- target_user: synthèse cible enrichie (segment principal + comportements + contexte d'usage).
+- client_personas: **exactement 2 ou 3 avatars clients** distincts, réalistes, complémentaires:
+  · name: prénom crédible (ex: Léa, Karim, Sophie)
+  · label: archétype court (ex: « Sportive Apple Watch »)
+  · age_range: tranche d'âge précise
+  · profile: situation, lifestyle, contexte (2-3 phrases)
+  · goals: objectifs concrets liés au concept
+  · frustrations: douleurs actuelles sans cette app
+  · why_this_app: pourquoi CETTE app résout son cas (lien direct au concept)
+- how_it_works: parcours utilisateur complet (welcome → onboarding → première victoire → paywall → usage récurrent).
+- differentiation: avantages vs apps généralistes ou concurrents du secteur (concret, pas marketing creux).
+- mvp_features: 5-8 fonctionnalités v1.0 **complètes** (écrans/flows nommés, production-ready).
+- monetization: reprendre les tarifs fournis si présents; sinon inférer le modèle sans inventer de montants.
+- risks: 3-4 risques réels (marché, rétention, différenciation, App Review).
+- build_prompt_seed: paragraphe dense pour générer l'app SwiftUI + Xcode (inclure personas + différenciation).
 
 Règles:
-- Français, registre vouvoiement (vous/votre), ton direct, pas de jargon inutile.
-- how_it_works: parcours utilisateur complet (first-run + usage récurrent).
-- differentiation: ce qui distingue vs apps généralistes ou concurrents évidents.
-- mvp_features: 5-8 **fonctionnalités v1.0 complètes** (nommer des écrans/flows finis, pas de stubs ni "plus tard").
-- build_prompt_seed: paragraphe dense pour générer une app **production-ready** SwiftUI + Xcode, soumissible App Review.
-- monetization: inférer du concept si mentionné, sinon "À définir plus tard" — ne pas inventer de pricing.
-- risks: vrais risques marché, produit ou conformité Apple.
+- Français, vouvoiement, ton expert mais accessible.
+- INTERDIT: copier-coller brut des réponses sans enrichissement.
+- INTERDIT: personas génériques interchangeables — chacun doit être unique et ancré dans le concept.
+- Les tarifs fournis dans les réponses doivent apparaître dans monetization.
 
 Réponds UNIQUEMENT en JSON conforme au schéma.`;
 
@@ -105,7 +133,7 @@ export function formatClarifyAnswersBlock(
   return questions
     .map((q) => {
       const raw = (answers[q.id] ?? "").trim();
-      const a = raw === "__skipped__" ? "" : raw;
+      const a = raw === "__skipped__" ? "" : normalizeFounderAnswerText(raw);
       return `- [${q.id}] ${q.question}\n  Réponse: ${a || "(non renseigné — déduire prudemment du concept)"}`;
     })
     .join("\n");
@@ -285,28 +313,25 @@ export async function assessApplabConcept(input: {
     failureDetail?: string;
   }>
 > {
-  const { buildLocalApplabConceptAssessment, shouldUseApplabLocalDevFallback } = await import(
-    "@/lib/trackapp-applab-create/local-dev-fallback"
-  );
-  if (shouldUseApplabLocalDevFallback()) {
-    return {
-      assessment: buildLocalApplabConceptAssessment({
-        name: input.name,
-        concept: input.concept,
-        understanding: input.understanding,
-      }),
-    };
-  }
+  const clarifications = formatClarifyAnswersBlock(input.answers, input.questions, {
+    name: input.name,
+    concept: input.concept,
+  });
 
   const userInput = JSON.stringify(
     {
+      mission:
+        "Étude de marché produit complète: analyser, développer et enrichir toutes les réponses du fondateur.",
       project_name: input.name.trim(),
       concept_raw: input.concept.trim(),
-      understanding: input.understanding,
-      clarifications: formatClarifyAnswersBlock(input.answers, input.questions, {
-        name: input.name,
-        concept: input.concept,
-      }),
+      founder_answers_raw: clarifications,
+      understanding_draft: input.understanding,
+      instructions_analyste: [
+        "Développer chaque réponse en profondeur — ne pas se contenter de reformuler.",
+        "Créer 2-3 personas clients distincts, crédibles et ancrés dans le concept.",
+        "Synthétiser une vraie étude de marché: insight, proposition de valeur, positionnement.",
+        "Aligner fonctionnalités v1.0, monétisation et cible en un récit cohérent.",
+      ],
     },
     null,
     2,
@@ -317,6 +342,7 @@ export async function assessApplabConcept(input: {
     input: userInput,
     schemaName: "applab_concept_assess",
     schema: APPLAB_CONCEPT_ASSESS_JSON_SCHEMA as unknown as Record<string, unknown>,
+    timeoutMs: 72_000,
   });
 
   if (!result.data) {

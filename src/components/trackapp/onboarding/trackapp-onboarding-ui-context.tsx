@@ -12,12 +12,13 @@ import {
 } from "react";
 
 import { trackappCommencerHref } from "@/lib/trackapp-landing-paths";
-import { isOnboardingOverlayOpen } from "@/lib/trackapp-onboarding-overlay";
+import { isOnboardingOverlayOpen, stripOnboardingOverlayParams } from "@/lib/trackapp-onboarding-overlay";
 
 type OnboardingUiContextValue = Readonly<{
   isOpen: boolean;
   isOpening: boolean;
   openOnboarding: () => void;
+  closeOnboarding: () => void;
 }>;
 
 const OnboardingUiContext = createContext<OnboardingUiContextValue | null>(null);
@@ -44,13 +45,22 @@ export function TrackappOnboardingUiProvider({ children }: Readonly<{ children: 
     });
   }, [optimisticOpen, pathname, router, urlOpen]);
 
+  const closeOnboarding = useCallback(() => {
+    setOptimisticOpen(false);
+    const nextSearch = stripOnboardingOverlayParams(searchParams.toString());
+    startTransition(() => {
+      router.replace(`${pathname}${nextSearch}`, { scroll: false });
+    });
+  }, [pathname, router, searchParams]);
+
   const value = useMemo(
     () => ({
       isOpen: urlOpen || optimisticOpen,
       isOpening: optimisticOpen || isPending,
       openOnboarding,
+      closeOnboarding,
     }),
-    [isPending, openOnboarding, optimisticOpen, urlOpen],
+    [closeOnboarding, isPending, openOnboarding, optimisticOpen, urlOpen],
   );
 
   return <OnboardingUiContext.Provider value={value}>{children}</OnboardingUiContext.Provider>;
@@ -63,6 +73,7 @@ export function useTrackappOnboardingUi(): OnboardingUiContextValue {
       isOpen: false,
       isOpening: false,
       openOnboarding: () => {},
+      closeOnboarding: () => {},
     };
   }
   return ctx;

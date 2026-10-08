@@ -66,6 +66,22 @@ body.trackapp-fidelity-body #app-app {
   body.trackapp-fidelity-body #app-app[data-route-kind="applab-create"] .app-main > .app-content {
     min-height: 100%;
   }
+
+  body.trackapp-fidelity-body #app-app[data-route-kind="landing-guest"] .app-main {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0.65rem 0 0 !important;
+    min-height: 100dvh !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  body.trackapp-fidelity-body #app-app[data-route-kind="landing-guest"] .app-main > .app-content {
+    min-height: 100%;
+  }
 }
 
 /* —— Icon rail (style Higgsfield) —— */
@@ -614,18 +630,27 @@ body.trackapp-fidelity-body #app-app .trackapp-lab-sidebar.trackapp-lab-sidebar-
   top: max(0.65rem, env(safe-area-inset-top, 0px));
   left: max(0.65rem, env(safe-area-inset-left, 0px));
   z-index: 410;
-  display: flex;
+  display: none;
   flex-direction: column;
   justify-content: center;
   gap: 5px;
   width: 2.5rem;
   height: 2.5rem;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 0.65rem;
-  background: rgb(8 10 18 / 0.92);
-  backdrop-filter: blur(12px);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.18s ease;
+}
+
+.trackapp-mobile-menu-btn:hover {
+  opacity: 0.88;
+}
+
+.trackapp-mobile-menu-btn:active {
+  transform: scale(0.94);
 }
 
 .trackapp-mobile-menu-btn span {
@@ -637,27 +662,80 @@ body.trackapp-fidelity-body #app-app .trackapp-lab-sidebar.trackapp-lab-sidebar-
   background: rgb(255 255 255 / 0.88);
 }
 
+body.trackapp-fidelity-body #app-app .app-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 88;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgb(2 4 10 / 0.52);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.trackapp-fidelity-body #app-app .app-sidebar-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 @media (max-width: 900px) {
   body.trackapp-fidelity-body #app-app .app-sidebar-overlay {
     inset: 0 !important;
   }
 
   body.trackapp-fidelity-body #app-app .trackapp-lab-sidebar {
-    width: min(56vw, 210px) !important;
-    min-width: min(56vw, 210px) !important;
-    background:
-      radial-gradient(120% 55% at 0% 0%, rgb(59 130 246 / 0.05) 0%, transparent 56%),
-      linear-gradient(165deg, rgb(7 8 14 / 0.28) 0%, rgb(8 10 18 / 0.22) 46%, rgb(10 6 15 / 0.2) 100%) !important;
-    backdrop-filter: blur(22px) saturate(135%) !important;
-    -webkit-backdrop-filter: blur(22px) saturate(135%) !important;
-    border-right: 1px solid rgb(148 163 184 / 0.1) !important;
-    box-shadow: 6px 0 24px rgb(0 0 0 / 0.14);
+    z-index: 90 !important;
   }
 
+  /* Sidebar = drawer hors-écran sur mobile (workspace ET landing AppLAB) */
+  body.trackapp-fidelity-body #app-app .trackapp-lab-sidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: min(82vw, 300px) !important;
+    min-width: min(82vw, 300px) !important;
+    max-width: min(82vw, 300px) !important;
+    margin: 0 !important;
+    transform: translateX(-102%);
+    transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+    background:
+      radial-gradient(120% 55% at 0% 0%, rgb(59 130 246 / 0.06) 0%, transparent 56%),
+      linear-gradient(165deg, rgb(9 11 18 / 0.97) 0%, rgb(10 12 20 / 0.95) 46%, rgb(12 8 18 / 0.95) 100%) !important;
+    backdrop-filter: blur(26px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(135%) !important;
+    border-right: 1px solid rgb(148 163 184 / 0.12) !important;
+    box-shadow: 12px 0 40px rgb(0 0 0 / 0.42);
+  }
+
+  body.trackapp-fidelity-body #app-app .trackapp-lab-sidebar.is-mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Contenu plein largeur — plus de rail/marge fantôme */
   body.trackapp-fidelity-body #app-app .app-main {
     margin-left: 0 !important;
     margin-top: 0 !important;
-    padding-top: 3.25rem;
+    padding-top: 3.5rem !important;
+  }
+
+  /* Bouton hamburger visible sur toutes les pages studio (mobile) */
+  body.trackapp-fidelity-body #app-app .trackapp-mobile-menu-btn {
+    display: flex !important;
+  }
+
+  /* Le bouton « ranger » desktop n'a pas de sens dans le drawer */
+  body.trackapp-fidelity-body #app-app .trackapp-studio-sidebar__head-toggle {
+    display: none !important;
   }
 }
 

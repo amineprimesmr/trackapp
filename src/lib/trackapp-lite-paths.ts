@@ -1,7 +1,10 @@
 /** Routes « lite » sans sidebar workspace — onboarding, paiement, auth, légal. */
 const LITE_FULLSCREEN_PREFIXES = [
   "/trackapp/onboarding",
+  "/trackapp/offers",
   "/trackapp/paiement",
+  "/trackapp/merci",
+  "/trackapp/bienvenue",
   "/trackapp/connexion",
   "/trackapp/inscription",
   "/trackapp/activation",

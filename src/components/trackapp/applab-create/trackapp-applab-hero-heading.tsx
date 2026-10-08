@@ -4,9 +4,9 @@ import { motion } from "framer-motion";
 
 import { HeroAppIconRotator, type HeroRotatorApp } from "@/components/tracker/hero-app-icon-rotator";
 import { TrackerLandingHeroTitle } from "@/components/tracker/tracker-landing-hero-title";
-import { heroTitleForStep, getStepInputProgress } from "@/lib/trackapp-applab-create/create-questions";
+import { heroTitleForStep } from "@/lib/trackapp-applab-create/create-questions";
 import type { ApplabCreateStepId } from "@/lib/trackapp-applab-create/types";
-import { applabLayoutTransition } from "@/lib/trackapp-applab-create/step-motion";
+import { applabFieldTransition } from "@/lib/trackapp-applab-create/step-motion";
 import { cn } from "@/lib/utils";
 
 type HeroCopy = Readonly<{
@@ -29,16 +29,15 @@ export function TrackappApplabHeroHeading({
   reduceMotion: boolean | null;
   heroRotatorApps?: readonly HeroRotatorApp[];
 }>) {
-  const layoutT = applabLayoutTransition(reduceMotion);
+  const fadeT = applabFieldTransition(reduceMotion, 0.18);
   const name = appName.trim() || "votre app";
   const isNameStep = step === "name";
   const isConcept = step === "concept";
-  const progress = getStepInputProgress(step);
-
+  const hideSynthesisRevealTitle = step === "synthesis" && synthesisPhase === "reveal";
   const title =
     step === "synthesis" ?
-      synthesisPhase === "reveal" ?
-        `Votre bilan AppLAB est prêt`
+      hideSynthesisRevealTitle ?
+        null
       : `Analyse de ${name}`
     : step === "concept" ?
       null
@@ -49,9 +48,9 @@ export function TrackappApplabHeroHeading({
   const titleKey = step === "synthesis" ? `synthesis-${synthesisPhase ?? "run"}` : step;
 
   return (
-    <motion.div layout className="ta-applab-studio__hero-copy" transition={layoutT}>
+    <div className="ta-applab-studio__hero-copy">
       {isNameStep ? (
-        <motion.div layout key={titleKey} transition={layoutT} initial={reduceMotion ? false : { opacity: 0.72 }} animate={{ opacity: 1 }}>
+        <motion.div key={titleKey} transition={fadeT} initial={reduceMotion ? false : { opacity: 0.72 }} animate={{ opacity: 1 }}>
           <TrackerLandingHeroTitle className="ta-applab-studio__hero-landing-title">
             Créez votre prochaine
             <br />
@@ -62,25 +61,24 @@ export function TrackappApplabHeroHeading({
             </span>
           </TrackerLandingHeroTitle>
         </motion.div>
-      ) : (
+      ) : hideSynthesisRevealTitle ? null : (
         <motion.h1
-          layout
           key={titleKey}
           className={cn(
             "ta-applab-studio__hero-title",
             "ta-applab-studio__hero-title--concept",
           )}
-          transition={layoutT}
+          transition={fadeT}
           initial={reduceMotion ? false : { opacity: 0.72 }}
           animate={{ opacity: 1 }}
         >
           {isConcept ? (
             <>
-              Décris le concept de{" "}
-              <motion.span layout="position" className="ta-applab-studio__hero-app-name" transition={layoutT}>
+              Qu&apos;est-ce que fait{" "}
+              <span className="ta-applab-studio__hero-app-name">
                 {name}
-              </motion.span>{" "}
-              en une phrase
+              </span>{" "}
+              ?
             </>
           ) : (
             title
@@ -88,19 +86,15 @@ export function TrackappApplabHeroHeading({
         </motion.h1>
       )}
 
-      {progress ? (
-        <motion.p layout className="ta-applab-studio__hero-sub ta-applab-studio__hero-sub--progress" transition={layoutT}>
-          Question {progress.current} sur {progress.total}
-        </motion.p>
-      ) : step === "synthesis" && synthesisPhase === "analyzing" ? (
-        <motion.p layout className="ta-applab-studio__hero-sub" transition={layoutT}>
+      {step === "synthesis" && synthesisPhase === "analyzing" ? (
+        <motion.p className="ta-applab-studio__hero-sub" transition={fadeT}>
           Concurrents, synthèse produit et prompt Xcode — tout est généré automatiquement.
         </motion.p>
       ) : hero.sub ? (
-        <motion.p layout className="ta-applab-studio__hero-sub" transition={layoutT}>
+        <motion.p className="ta-applab-studio__hero-sub" transition={fadeT}>
           {hero.sub}
         </motion.p>
       ) : null}
-    </motion.div>
+    </div>
   );
 }

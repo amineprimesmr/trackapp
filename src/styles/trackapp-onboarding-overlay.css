@@ -5,7 +5,7 @@ body.trackapp-onboarding-open {
 }
 
 body.trackapp-onboarding-open #app-app,
-body.trackapp-onboarding-open .trackapp-landing-auth-bar,
+body.trackapp-onboarding-open .trackapp-landing-topnav,
 body.trackapp-onboarding-open .app-main,
 body.trackapp-onboarding-open .app-content {
   pointer-events: none !important;
@@ -34,13 +34,20 @@ body.trackapp-onboarding-open .ta-onboarding-overlay-host {
 .ta-onboarding-overlay-host__scrim {
   position: absolute;
   inset: 0;
+  z-index: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  appearance: none;
   background: #0e1113;
+  cursor: pointer;
   pointer-events: auto;
 }
 
 .ta-onboarding-overlay-host__dialog {
   position: relative;
   z-index: 1;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -125,22 +132,18 @@ body.trackapp-onboarding-open .ta-onboarding-overlay-host {
 }
 
 .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__step-motion {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  min-height: 100%;
+  justify-content: flex-start;
   width: 100%;
+  min-height: 0;
+  /* Centre verticalement quand ça tient, mais garde le haut atteignable si ça déborde */
+  margin-block: auto;
 }
 
 .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__step-motion--swap {
-  min-height: 12rem;
-}
-
-@media (min-width: 900px) {
-  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__step-motion--swap {
-    min-height: 16rem;
-  }
+  min-height: 0;
 }
 
 .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__interstitial,
@@ -263,6 +266,34 @@ body.trackapp-onboarding-open .ta-onboarding-overlay-host {
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
     width: 100%;
+  }
+
+  /* Grille 2×2 compacte : tient en entier sans scroll dans la modale PC */
+  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__grid {
+    margin-top: 1rem;
+    gap: 0.6rem;
+  }
+
+  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__grid-card {
+    aspect-ratio: auto;
+    min-height: 0;
+    height: clamp(7.25rem, 17vh, 9rem);
+    padding: 0.9rem 0.95rem 0.85rem;
+  }
+
+  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__grid-bars {
+    gap: 0.34rem;
+    padding: 0.25rem 0 0.15rem;
+  }
+
+  /* Listes/chips : un peu moins d'air en haut pour éviter le scroll inutile */
+  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__list--options,
+  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__chips {
+    margin-top: 1rem;
+  }
+
+  .ta-onboarding-overlay-host .ta-onboarding--overlay .ta-onboarding__title--hero {
+    margin-bottom: 0;
   }
 }
 

@@ -4,7 +4,6 @@ export const TRACKAPP_MARKETING_PATH = "/trackapp/marketing";
 export const TRACKAPP_ADS_PATH = "/trackapp/ads";
 /** @deprecated Redirige vers `/trackapp/marketing#organique`. */
 export const TRACKAPP_ORGANIQUE_PATH = "/trackapp/organique";
-export const TRACKAPP_RESSOURCES_PATH = "/trackapp/ressources";
 
 export function isTrackappMarketingPath(pathname: string): boolean {
   const path = pathname.split("?")[0] ?? pathname;
@@ -24,9 +23,4 @@ export function isTrackappAdsPath(pathname: string): boolean {
 export function isTrackappOrganiquePath(pathname: string): boolean {
   const path = pathname.split("?")[0] ?? pathname;
   return path === TRACKAPP_ORGANIQUE_PATH || path.startsWith(`${TRACKAPP_ORGANIQUE_PATH}/`);
-}
-
-export function isTrackappRessourcesPath(pathname: string): boolean {
-  const path = pathname.split("?")[0] ?? pathname;
-  return path === TRACKAPP_RESSOURCES_PATH || path.startsWith(`${TRACKAPP_RESSOURCES_PATH}/`);
 }

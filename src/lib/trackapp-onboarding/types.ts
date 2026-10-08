@@ -71,3 +71,18 @@ export type OnboardingProfileState = Readonly<{
 }>;
 
 export type CreatorLevel = "beginner" | "mid" | "upper" | "top";
+
+/** Props bootstrap overlay / page onboarding (sans import serveur). */
+export type TrackappOnboardingPageProps = Readonly<{
+  initialPayload: TrackappUserOnboardingPayload | null;
+  initialCompleted: boolean;
+  loggedIn: boolean;
+  alreadyPremium: boolean;
+}>;
+
+export const GUEST_ONBOARDING_PAGE_PROPS: TrackappOnboardingPageProps = {
+  initialPayload: null,
+  initialCompleted: false,
+  loggedIn: false,
+  alreadyPremium: false,
+};

@@ -37,6 +37,9 @@ import type {
   TrackappOnboardingAnswers,
   TrackappUserOnboardingPayload,
 } from "@/lib/trackapp-onboarding/types";
+import { trackappConnexionNextHref } from "@/lib/trackapp-landing-paths";
+import { resolvePostPaymentWorkspaceHref, claimPostPaymentAccess } from "@/lib/trackapp/post-payment-flow";
+import { trackappWhopCheckoutUrl } from "@/lib/trackapp/whop-checkout";
 import { cn } from "@/lib/utils";
 
 const LIKERT_ICONS: readonly string[] = ["👎👎", "👎", "😐", "👍", "👍👍"];
@@ -134,6 +137,7 @@ type Props = Readonly<{
   initialCompleted: boolean;
   loggedIn?: boolean;
   alreadyPremium?: boolean;
+  postPayment?: boolean;
   overlay?: boolean;
   returnHref?: string;
   onDismiss?: () => void;
@@ -222,14 +226,16 @@ export function TrackappOnboardingFlow({
   initialCompleted,
   loggedIn = false,
   alreadyPremium = false,
+  postPayment = false,
   overlay = false,
   returnHref = "/trackapp",
   onDismiss,
 }: Props) {
   const router = useRouter();
   const reduce = useReducedMotion();
-  const motionReduced = reduce || overlay;
-  const [hydrated, setHydrated] = useState(false);
+  const motionReduced = reduce;
+  const persistLocalDraft = !overlay;
+  const [hydrated, setHydrated] = useState(() => overlay || Boolean(initialPayload || initialCompleted));
   const [payload, setPayload] = useState<TrackappUserOnboardingPayload>(initialPayload ?? defaultPayload());
   const [stepIndex, setStepIndex] = useState(initialPayload?.currentStepIndex ?? 0);
   const [busy, setBusy] = useState(false);
@@ -248,18 +254,28 @@ export function TrackappOnboardingFlow({
   }, [answers.project_status]);
 
   useEffect(() => {
-    if (initialPayload || initialCompleted) {
-      setHydrated(true);
-      return;
-    }
-    const draft = readOnboardingDraft();
-    if (draft) {
-      setPayload(draft);
-      setStepIndex(Math.min(draft.currentStepIndex, resolveActiveOnboardingSteps(draft.answers).length - 1));
-      setProjectName(draft.project?.name ?? draft.answers.project_name ?? "");
+    if (!overlay && !initialPayload && !initialCompleted) {
+      const draft = readOnboardingDraft();
+      if (draft) {
+        setPayload(draft);
+        setStepIndex(Math.min(draft.currentStepIndex, resolveActiveOnboardingSteps(draft.answers).length - 1));
+        setProjectName(draft.project?.name ?? draft.answers.project_name ?? "");
+      }
     }
     setHydrated(true);
-  }, [initialCompleted, initialPayload]);
+  }, [initialCompleted, initialPayload, overlay]);
+
+  useEffect(() => {
+    if (!initialPayload) return;
+    setPayload(initialPayload);
+    setStepIndex(
+      Math.min(
+        initialPayload.currentStepIndex ?? 0,
+        Math.max(0, resolveActiveOnboardingSteps(initialPayload.answers).length - 1),
+      ),
+    );
+    setProjectName(initialPayload.project?.name ?? initialPayload.answers.project_name ?? "");
+  }, [initialPayload]);
 
   useEffect(() => {
     if (initialCompleted) {
@@ -267,13 +283,13 @@ export function TrackappOnboardingFlow({
         onDismiss();
         return;
       }
-      router.replace(alreadyPremium ? returnHref : "/trackapp/paiement");
+      router.replace(alreadyPremium ? returnHref : trackappWhopCheckoutUrl());
     }
   }, [initialCompleted, alreadyPremium, onDismiss, overlay, returnHref, router]);
 
   const save = useCallback(
     async (next: TrackappUserOnboardingPayload, complete = false) => {
-      writeOnboardingDraft(next);
+      if (persistLocalDraft) writeOnboardingDraft(next);
       setPayload(next);
       if (!loggedIn) return;
       setBusy(true);
@@ -283,7 +299,7 @@ export function TrackappOnboardingFlow({
         setBusy(false);
       }
     },
-    [loggedIn],
+    [loggedIn, persistLocalDraft],
   );
 
   const setAnswer = useCallback((key: keyof TrackappOnboardingAnswers, value: string | string[] | number) => {
@@ -348,22 +364,30 @@ export function TrackappOnboardingFlow({
       };
       setBusy(true);
       try {
-        writeOnboardingDraft(finalPayload);
-        markOnboardingLocallyComplete();
+        if (persistLocalDraft) {
+          writeOnboardingDraft(finalPayload);
+          markOnboardingLocallyComplete();
+        }
         if (loggedIn) await persistRemote(finalPayload, true);
-        const premiumDest =
-          resolvedMode === "defined" ?
-            `${returnHref.split("?")[0]}?onboarding=1`
-          : "/trackapp/apptracker?onboarding=discover";
+        const premiumDest = resolvePostPaymentWorkspaceHref(resolvedMode, returnHref);
         if (overlay && onDismiss) onDismiss();
-        router.push(alreadyPremium ? premiumDest : "/trackapp/paiement");
+        if (alreadyPremium) {
+          if (loggedIn) {
+            if (postPayment) await claimPostPaymentAccess();
+            router.push(premiumDest);
+          } else {
+            router.push(trackappConnexionNextHref(premiumDest));
+          }
+        } else {
+          window.location.href = trackappWhopCheckoutUrl();
+        }
       } catch {
         setBusy(false);
       }
       return;
     }
 
-    writeOnboardingDraft(nextPayload);
+    if (persistLocalDraft) writeOnboardingDraft(nextPayload);
     if (loggedIn) await save(nextPayload);
     else setPayload(nextPayload);
     setStepIndex(nextIndex);
@@ -376,7 +400,9 @@ export function TrackappOnboardingFlow({
     step.kind,
     stepIndex,
     loggedIn,
+    persistLocalDraft,
     alreadyPremium,
+    postPayment,
     totalSteps,
     overlay,
     onDismiss,
@@ -637,9 +663,9 @@ export function TrackappOnboardingFlow({
             label={
               step.kind === "summary" ?
                 alreadyPremium ?
-                  projectMode === "defined" ?
-                    "Accéder à mon projet"
-                  : "Explorer les apps"
+                  loggedIn ?
+                    "Accéder à mon espace"
+                  : "Se connecter et accéder"
                 : "Voir l'offre Trackapp"
               : "Continuer"
             }
@@ -653,10 +679,10 @@ export function TrackappOnboardingFlow({
           <motion.div
             key={step.id}
             className="ta-onboarding__step-motion ta-onboarding__step-motion--swap"
-            initial={motionReduced ? false : { opacity: 0, x: overlay ? 8 : 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={motionReduced ? undefined : { opacity: 0, x: overlay ? -6 : -16 }}
-            transition={{ duration: overlay ? 0.18 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+            initial={motionReduced ? false : { opacity: 0, y: overlay ? 10 : 0, x: overlay ? 0 : 16 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={motionReduced ? undefined : { opacity: 0, y: overlay ? -6 : 0, x: overlay ? 0 : -16 }}
+            transition={{ duration: overlay ? 0.24 : 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
             {renderQuestion()}
           </motion.div>

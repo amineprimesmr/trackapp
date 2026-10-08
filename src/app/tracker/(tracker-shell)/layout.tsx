@@ -11,23 +11,13 @@ export default async function TrackerShellLayout({ children }: { children: React
   const user = sb ? (await sb.auth.getUser()).data.user : null;
   const loggedIn = Boolean(user);
 
-  let hasPremium = false;
-  if (user && sb) {
-    const { data: profile } = await sb
-      .from("trackapp_profiles")
-      .select("plan_unlocked_at")
-      .eq("id", user.id)
-      .maybeSingle();
-    hasPremium = Boolean(profile?.plan_unlocked_at);
-  }
-
   return (
     <TrackerNavigationProvider>
       <div
         data-tracker
         className="min-h-dvh bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(255,255,255,0.07),#000000)] font-sans text-white antialiased"
       >
-        <TrackerHeader loggedIn={loggedIn} hasPremium={hasPremium} />
+        <TrackerHeader loggedIn={loggedIn} />
         <main className="pt-[var(--tracker-header-offset)]">{children}</main>
         <TrackerFooter loggedIn={loggedIn} />
       </div>

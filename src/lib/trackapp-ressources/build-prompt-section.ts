@@ -8,10 +8,10 @@ import {
   resourceZipFilename,
 } from "@/lib/trackapp-ressources/match-for-prompt";
 import {
+  promptExportSiteOrigin,
   resourcesManifestPublicUrl,
   resourceVideoPublicUrl,
   resourceZipPublicUrl,
-  trackappSiteOrigin,
 } from "@/lib/trackapp-ressources/public-urls";
 
 function bulletList(items: readonly string[]): string {
@@ -34,7 +34,7 @@ export function buildTrackappResourcesPromptSection(input: {
       mvpFeatures: input.mvpFeatures,
     });
 
-  const origin = input.siteOrigin ?? trackappSiteOrigin();
+  const origin = input.siteOrigin ?? promptExportSiteOrigin();
   const appName = input.appName ?? "App";
   const manifestUrl = resourcesManifestPublicUrl(origin);
 
@@ -81,7 +81,8 @@ export function buildTrackappResourcesPromptSection(input: {
     "Tu **dois** intégrer les composants SwiftUI Trackapp ci-dessous. Chaque ZIP contient du code prêt à adapter.",
     "",
     "## Accès fichiers (Cursor / Claude / terminal)",
-    "Les ZIP et vidéos sont servis **publiquement** sur Trackapp — pas besoin de cookie ni login pour télécharger.",
+    "Les ZIP et vidéos sont servis **publiquement** sur `https://www.trackapp.fr` — pas besoin de cookie ni login.",
+    "Si un téléchargement échoue (404), implémenter le funnel à partir de UX_FLOWS.md sans bloquer sur les ZIP.",
     "",
     `- **Manifest complet :** ${manifestUrl}`,
     `- **Dossier cible dans le projet utilisateur :** \`ThirdPartyUI/Trackapp/\``,

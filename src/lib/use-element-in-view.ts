@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type RefObject } from "react";
 
 type Options = {
   threshold?: number | number[];
   rootMargin?: string;
+  /** Conteneur scroll (ex. stage AppLAB) — sinon viewport. */
+  rootRef?: RefObject<Element | null>;
 };
 
 /**
@@ -14,6 +16,7 @@ type Options = {
 export function useElementInView<T extends Element>({
   threshold = 0.12,
   rootMargin = "0px",
+  rootRef,
 }: Options = {}): {
   ref: (node: T | null) => void;
   inView: boolean;
@@ -33,14 +36,15 @@ export function useElementInView<T extends Element>({
       return;
     }
 
+    const root = rootRef?.current ?? null;
     const observer = new IntersectionObserver(
       ([entry]) => setInView(entry?.isIntersecting ?? false),
-      { threshold, rootMargin },
+      { threshold, rootMargin, root: root ?? undefined },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [node, threshold, rootMargin]);
+  }, [node, threshold, rootMargin, rootRef]);
 
   return { ref, inView };
 }

@@ -11,7 +11,6 @@ import {
   isTrackappApptrackerPath,
   isTrackappMarketingPath,
   isTrackappOrganiquePath,
-  isTrackappRessourcesPath,
   TRACKAPP_APPTRACKER_PATH,
 } from "@/lib/trackapp-tools-paths";
 
@@ -87,10 +86,6 @@ export function resolveTrackappBreadcrumb(pathname: string): TrackappBreadcrumb 
 
   if (isTrackappMarketingPath(pathname) || isTrackappAdsPath(pathname) || isTrackappOrganiquePath(pathname)) {
     return { sectionLabel: "Outils", pageLabel: "Marketing Studio" };
-  }
-
-  if (isTrackappRessourcesPath(pathname)) {
-    return { sectionLabel: "Outils", pageLabel: "Ressources" };
   }
 
   if (pathname.startsWith("/trackapp/logiciels")) {

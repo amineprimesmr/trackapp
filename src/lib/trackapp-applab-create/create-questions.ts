@@ -1,8 +1,15 @@
 import type { ApplabClarifyingQuestion, ApplabConceptUnderstanding } from "@/lib/trackapp-applab-project/types";
+import { buildCompetitorSearchHints } from "@/lib/trackapp-applab-project/competitor-sector";
 
+import { normalizeFounderAnswerText } from "@/lib/trackapp-applab-create/normalize-founder-text";
 import type { ApplabCreateStepId } from "@/lib/trackapp-applab-create/types";
+import {
+  ensurePricingAnswer,
+  isValidPricingAnswer,
+  monetizationFromPricing,
+} from "@/lib/trackapp-applab-create/pricing-plans";
 
-export type ApplabAnswerStepId = "audience" | "problem" | "v1_features" | "pricing";
+export type ApplabAnswerStepId = "audience" | "pricing";
 
 export type CreateQuestionAnswers = Readonly<Record<string, string>>;
 
@@ -24,20 +31,16 @@ export type CreateQuestionField = Readonly<{
   rows: number;
 }>;
 
-/** Étapes avec saisie utilisateur (6 questions). */
+/** Étapes avec saisie utilisateur (4 questions). */
 export const APPLAB_INPUT_STEPS: readonly ApplabCreateStepId[] = [
   "name",
   "concept",
   "audience",
-  "problem",
-  "v1_features",
   "pricing",
 ] as const;
 
 export const APPLAB_ANSWER_STEP_ORDER: readonly ApplabAnswerStepId[] = [
   "audience",
-  "problem",
-  "v1_features",
   "pricing",
 ] as const;
 
@@ -64,36 +67,13 @@ const FIELD_CONFIG: Record<
     maxLength: 600,
     rows: 3,
   },
-  problem: {
-    help: "La frustration concrète avant l'app — pas une liste de features. Scène avant / après si possible.",
-    placeholder:
-      "Ex. Ils abandonnent car les apps fitness sont trop complexes ; ils veulent savoir quoi faire aujourd'hui en 15 min…",
-    examples: [
-      "Avant : je procrastine. Après : j'ai un plan clair chaque matin",
-      "Ils paient déjà une app mais n'utilisent que 10 % des fonctions",
-    ],
-    minLength: 15,
-    maxLength: 600,
-    rows: 3,
-  },
-  v1_features: {
-    help: "Maximum 3 fonctionnalités pour la v1 App Store — finies et soumissibles, pas de placeholder.",
-    placeholder: "Ex. 1) Parcours guidé du jour  2) Historique & streak  3) Paywall abonnement + essai 7 jours",
-    examples: [
-      "Quiz quotidien, classement amis, profil stats",
-      "Scan repas, macros, objectif poids",
-    ],
-    minLength: 12,
-    maxLength: 500,
-    rows: 3,
-  },
   pricing: {
-    help: "Abonnement mensuel/annuel, essai gratuit, achat unique ou gratuit au lancement — montant si possible.",
-    placeholder: "Ex. 9,99 €/mois après essai 7 jours, ou 49 €/an, ou gratuit 3 mois puis 6,99 €/mois…",
-    examples: ["6,99 €/mois", "Gratuit + premium 4,99 €/mois", "Achat unique 19,99 €"],
-    minLength: 4,
-    maxLength: 400,
-    rows: 2,
+    help: "Essai gratuit, abonnements mensuel ou annuel — ajustez les montants ou ajoutez d'autres offres.",
+    placeholder: "",
+    examples: [],
+    minLength: 1,
+    maxLength: 2000,
+    rows: 1,
   },
 };
 
@@ -129,13 +109,8 @@ export function getQuestionField(step: ApplabAnswerStepId, ctx: CreateQuestionCo
   return { id: step, step, question: heroTitleForStep(step, ctx.name), ...base };
 }
 
-export function getStepInputProgress(step: ApplabCreateStepId): { current: number; total: number } | null {
-  if (!isAnswerStep(step)) return null;
-  const i = APPLAB_ANSWER_STEP_ORDER.indexOf(step);
-  return { current: i + 1, total: APPLAB_ANSWER_STEP_ORDER.length };
-}
-
 export function canSubmitAnswerStep(step: ApplabAnswerStepId, value: string): boolean {
+  if (step === "pricing") return isValidPricingAnswer(value);
   const min = FIELD_CONFIG[step].minLength;
   return value.trim().length >= min;
 }
@@ -159,11 +134,19 @@ export function createQuestionsForApi(ctx: CreateQuestionContext): ApplabClarify
 }
 
 export function formatCreateAnswersBlock(ctx: CreateQuestionContext): string {
-  return APPLAB_ANSWER_STEP_ORDER.map((id) => {
-    const field = getQuestionField(id, ctx);
-    const a = answerOf(ctx.answers, id);
-    return `- [${id}] ${heroTitleForStep(id, ctx.name)}\n  Réponse: ${a || "(non renseigné)"}`;
-  }).join("\n");
+  const norm = (s: string) => normalizeFounderAnswerText(s);
+  const header = [
+    `- [name] Nom du projet\n  Réponse: ${norm(ctx.name) || "(non renseigné)"}`,
+    `- [concept] ${heroTitleForStep("concept", ctx.name)}\n  Réponse: ${norm(ctx.concept) || "(non renseigné)"}`,
+  ];
+  const steps = APPLAB_ANSWER_STEP_ORDER.map((id) => {
+    const a =
+      id === "pricing" ?
+        monetizationFromPricing(answerOf(ctx.answers, id))
+      : answerOf(ctx.answers, id);
+    return `- [${id}] ${heroTitleForStep(id, ctx.name)}\n  Réponse: ${norm(a) || "(non renseigné)"}`;
+  });
+  return [...header, ...steps].join("\n");
 }
 
 export function heroTitleForStep(step: ApplabCreateStepId, appName: string): string {
@@ -172,17 +155,13 @@ export function heroTitleForStep(step: ApplabCreateStepId, appName: string): str
     case "name":
       return "Créez votre prochaine app maintenant";
     case "concept":
-      return `Décris le concept de ${app} en une phrase`;
+      return `Qu'est-ce que fait ${app} ?`;
     case "audience":
-      return "C'est pour qui exactement";
-    case "problem":
-      return "Le problème principal que l'app résout";
-    case "v1_features":
-      return "Les fonctionnalités de la V1 (3 max)";
+      return "À qui s'adresse votre app ?";
     case "pricing":
-      return "Le prix des abonnements";
+      return "Choisissez les tarifs de votre app";
     case "synthesis":
-      return `Bilan AppLAB — ${app}`;
+      return `Bilan produit — ${app}`;
     default:
       return "AppLAB Studio";
   }
@@ -195,33 +174,42 @@ export function buildUnderstandingFromCreateAnswers(
 ): ApplabConceptUnderstanding {
   const migrated = migrateCreateAnswers(answers);
   const audience = answerOf(migrated, "audience");
-  const problem = answerOf(migrated, "problem");
-  const v1 = answerOf(migrated, "v1_features");
+  const legacyProblem = answerOf(migrated, "problem");
+  const legacyV1 = answerOf(migrated, "v1_features");
   const pricing = answerOf(migrated, "pricing");
 
-  const features = v1
+  const features = legacyV1
     .split(/\n|[;,]|(?:\d+[\).])/)
     .map((s) => s.trim())
     .filter((s) => s.length >= 3)
     .slice(0, 3);
 
-  const searchQueries = [concept.slice(0, 48), problem.slice(0, 40), v1.slice(0, 40), ...features]
+  const conceptCorpus = `${concept} ${audience} ${legacyV1}`.trim();
+  const competitorHints = buildCompetitorSearchHints(concept, conceptCorpus);
+
+  const searchQueries = [
+    ...competitorHints.searchQueries,
+    concept.slice(0, 48),
+    legacyV1.slice(0, 40),
+    ...features,
+  ]
     .map((s) => s.trim())
     .filter((s) => s.length >= 4)
-    .slice(0, 6);
+    .filter((s, i, arr) => arr.indexOf(s) === i)
+    .slice(0, 8);
 
   return {
-    core_problem: problem || concept,
+    core_problem: legacyProblem || concept,
     target_user: audience || "À affiner",
-    main_use_case: v1 || concept,
+    main_use_case: legacyV1 || concept,
     niche: concept.slice(0, 280),
     specific_subject: concept,
     language_or_market: "App Store France — interface FR (décision Trackapp)",
-    monetization: pricing || "Non précisé",
-    key_features: features.length > 0 ? features : [v1.slice(0, 120) || concept.slice(0, 120)],
-    not_competitors: [],
+    monetization: monetizationFromPricing(pricing),
+    key_features: features.length > 0 ? features : [legacyV1.slice(0, 120) || concept.slice(0, 120)],
+    not_competitors: [...competitorHints.notCompetitors],
     search_queries: searchQueries,
-    must_match: [],
+    must_match: [...competitorHints.mustMatch],
   };
 }
 
